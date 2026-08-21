@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B120E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pneus">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icone-192.png">
+<link rel="icon" href="icone-192.png">
+<title>Contagem de Pneus</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+:root{--tinta:#0B120E;--chapa:#131C17;--chapa2:#1A251F;--linha:#27362D;--claro:#E6EDE8;
+  --meio:#8B9C92;--sinal:#3ECB74;--alerta:#E0553F;--aviso:#E8A33D}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--tinta);color:var(--claro);
+  min-height:100vh;padding-bottom:118px;max-width:540px;margin:0 auto;padding-top:env(safe-area-inset-top)}
+.faixa{height:6px;background:repeating-linear-gradient(115deg,var(--sinal) 0 14px,var(--tinta) 14px 28px)}
+header{padding:16px 16px 12px;background:var(--chapa);border-bottom:1px solid var(--linha)}
+.topo{display:flex;align-items:flex-start;gap:10px}
+.titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:23px;
+  letter-spacing:.045em;text-transform:uppercase;line-height:1}
+.sub{font-size:11px;color:var(--meio);letter-spacing:.09em;text-transform:uppercase;margin-top:5px}
+.cracha{background:var(--chapa2);border:1px solid var(--linha);border-radius:999px;padding:6px 12px;
+  font-size:12px;color:var(--claro);cursor:pointer;font-family:inherit;white-space:nowrap;
+  max-width:136px;overflow:hidden;text-overflow:ellipsis;margin-left:auto}
+.rot{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--meio);display:block;margin-bottom:4px}
+input,textarea,select{font-family:inherit;background:var(--chapa2);border:1px solid var(--linha);
+  color:var(--claro);border-radius:9px;padding:10px;font-size:15px;width:100%;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--sinal);box-shadow:0 0 0 3px rgba(62,203,116,.16)}
+input[type=date]{font-family:'IBM Plex Mono',monospace}
+.linhaTopo{display:flex;gap:8px;margin-top:14px;align-items:flex-end}
+.campoData{flex:1}
+.sync{font-size:11px;color:var(--meio);margin-top:9px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ponto{width:6px;height:6px;border-radius:50%;background:var(--sinal);flex-shrink:0}
+.ponto.off{background:var(--alerta)}
+.selo{background:rgba(62,203,116,.15);color:var(--sinal);border:1px solid rgba(62,203,116,.35);
+  border-radius:999px;padding:2px 9px;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.fita{display:flex;gap:1px;margin-top:12px;border-radius:10px;overflow:hidden;border:1px solid var(--linha)}
+.fitaBox{flex:1;background:var(--chapa2);padding:9px 5px;text-align:center}
+.fitaNum{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:20px;line-height:1.1}
+.fitaRot{font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--meio);margin-top:3px}
+nav{display:flex;gap:6px;padding:12px 16px 0}
+nav button{flex:1;background:none;border:none;border-bottom:2px solid var(--linha);color:var(--meio);
+  padding:9px 0 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;
+  letter-spacing:.07em;text-transform:uppercase;cursor:pointer}
+nav button.on{color:var(--sinal);border-color:var(--sinal)}
+main{padding:16px}
+.grupoTit{display:flex;align-items:baseline;gap:9px;margin:22px 0 9px}
+.grupoTit h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:18px;
+  letter-spacing:.09em;text-transform:uppercase}
+.grupoTit span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--meio)}
+.card{background:var(--chapa);border:1px solid var(--linha);border-radius:12px;margin-bottom:8px;overflow:hidden}
+.card.on{border-color:var(--sinal)}
+.card.ok{border-left:3px solid var(--sinal)}
+.card.falta{border-left:3px solid var(--alerta)}
+.card.sobra{border-left:3px solid var(--aviso)}
+.cabeca{display:flex;align-items:center;gap:10px;padding:11px 12px}
+.medida{flex:1;min-width:0;background:none;border:none;color:var(--claro);text-align:left;
+  font-family:inherit;cursor:pointer}
+.medidaNome{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:18px;line-height:1.15}
+.medidaMarca{font-size:11px;color:var(--meio);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.medidaCod{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--meio);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dif{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;margin-top:3px}
+.dif.falta{color:var(--alerta)}
+.dif.sobra{color:var(--aviso)}
+.dif.ok{color:var(--sinal)}
+.stepper{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.passo{width:34px;height:34px;border-radius:9px;border:1px solid var(--linha);background:var(--chapa2);
+  color:var(--claro);font-size:19px;line-height:1;cursor:pointer}
+.passo:active{background:var(--sinal);color:var(--tinta)}
+.visor{width:54px;text-align:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:19px;padding:8px 2px}
+.visor::-webkit-outer-spin-button,.visor::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.detalhe{border-top:1px solid var(--linha);padding:12px;background:var(--chapa2)}
+.desc{font-size:11px;color:var(--meio);line-height:1.45;margin-bottom:11px;font-family:'IBM Plex Mono',monospace}
+.quatro{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.quatro input{font-family:'IBM Plex Mono',monospace;text-align:center;font-weight:600}
+.difCx{display:flex;align-items:center;gap:10px;margin-top:11px;padding:10px 12px;border-radius:9px;
+  border:1px solid var(--linha);background:var(--chapa)}
+.difCx .rot{flex:1;margin:0}
+.difVal{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:20px}
+.difCx.falta{border-color:rgba(224,85,63,.5);background:rgba(224,85,63,.1)}
+.difCx.sobra{border-color:rgba(232,163,61,.5);background:rgba(232,163,61,.1)}
+.difCx.ok{border-color:rgba(62,203,116,.4);background:rgba(62,203,116,.08)}
+.dica{font-size:10px;color:var(--meio);margin-top:6px;line-height:1.5}
+.assina{font-size:10px;color:var(--meio);margin-top:9px;font-family:'IBM Plex Mono',monospace}
+textarea{margin-top:10px;resize:vertical;min-height:52px;font-size:14px}
+.rodape{position:fixed;bottom:0;left:0;right:0;max-width:540px;margin:0 auto;background:var(--chapa);
+  border-top:1px solid var(--linha);padding:11px 16px calc(14px + env(safe-area-inset-bottom))}
+.linhaBtn{display:flex;gap:8px}
+.linhaBtn+.linhaBtn{margin-top:8px}
+.btn{flex:1;padding:12px 6px;border-radius:10px;border:1px solid var(--linha);background:var(--chapa2);
+  color:var(--claro);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;
+  letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.btn.forte{background:var(--sinal);color:#07130C;border-color:var(--sinal)}
+.btn.risco{color:var(--alerta)}
+.aviso{padding:9px 12px;border-radius:9px;font-size:13px;margin-bottom:12px;line-height:1.5}
+.aviso.ok{background:rgba(62,203,116,.13);color:var(--sinal);border:1px solid rgba(62,203,116,.3)}
+.aviso.ruim{background:rgba(224,85,63,.13);color:var(--alerta);border:1px solid rgba(224,85,63,.3)}
+.aviso.alerta{background:rgba(232,163,61,.13);color:var(--aviso);border:1px solid rgba(232,163,61,.3)}
+.dia{display:flex;align-items:center;gap:11px;background:var(--chapa);border:1px solid var(--linha);
+  border-radius:11px;padding:12px;margin-bottom:8px}
+.diaData{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px}
+.diaInfo{font-size:11px;color:var(--meio);margin-top:3px}
+.diaBtn{background:none;border:1px solid var(--linha);color:var(--meio);border-radius:8px;
+  padding:7px 11px;font-size:12px;cursor:pointer;font-family:inherit}
+.vazioMsg{text-align:center;color:var(--meio);font-size:14px;padding:44px 20px;line-height:1.6}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;
+  justify-content:center;padding:20px;z-index:50}
+.modalCx{background:var(--chapa);border:1px solid var(--linha);border-radius:14px;padding:20px;
+  max-width:380px;width:100%;max-height:88vh;overflow:auto}
+.modalCx h3{font-family:'Barlow Condensed',sans-serif;font-size:19px;letter-spacing:.05em;
+  text-transform:uppercase;margin-bottom:10px}
+.modalCx p{font-size:13px;line-height:1.55;margin-bottom:14px;color:var(--meio)}
+.modalCx label{display:block;margin-bottom:12px}
+.itemLista{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--linha)}
+.itemLista b{font-family:'Barlow Condensed',sans-serif;font-size:15px}
+.esconde{display:none}
+</style>
+</head>
+<body>
+
+<div class="faixa"></div>
+
+<header>
+  <div class="topo">
+    <div>
+      <div class="titulo">Contagem de pneus</div>
+      <div class="sub">Controle diário · pátio</div>
+    </div>
+    <button class="cracha" id="btnCracha">Quem é você?</button>
+  </div>
+  <div class="linhaTopo">
+    <label class="campoData"><span class="rot">Data da contagem</span><input type="date" id="inpData"></label>
+    <button class="btn" id="btnAtualizar" style="flex:0;padding:11px 14px">Atualizar</button>
+  </div>
+  <div class="sync"><span class="ponto" id="pontoSync"></span><span id="txtSync">Carregando…</span></div>
+  <div class="fita">
+    <div class="fitaBox"><div class="fitaNum" id="tSaldo">0</div><div class="fitaRot">Sistema</div></div>
+    <div class="fitaBox"><div class="fitaNum" id="tFisico">0</div><div class="fitaRot">Físico</div></div>
+    <div class="fitaBox"><div class="fitaNum" id="tDif" style="color:var(--sinal)">0</div><div class="fitaRot">Diferença</div></div>
+    <div class="fitaBox"><div class="fitaNum" id="tDiverg">0</div><div class="fitaRot">Divergem</div></div>
+    <div class="fitaBox"><div class="fitaNum" id="tItens">0</div><div class="fitaRot">Itens</div></div>
+  </div>
+</header>
+
+<nav>
+  <button id="abaContagem" class="on">Contagem</button>
+  <button id="abaDiverg">Diferenças</button>
+  <button id="abaHistorico">Histórico</button>
+</nav>
+
+<main>
+  <div id="avisos"></div>
+  <div id="telaContagem"></div>
+  <div id="telaDiverg" class="esconde"></div>
+  <div id="telaHistorico" class="esconde"></div>
+</main>
+
+<div class="rodape" id="rodape">
+  <div class="linhaBtn">
+    <button class="btn" id="btnNovoItem">+ Pneu</button>
+    <button class="btn" id="btnCopiar">Copiar último</button>
+    <button class="btn" id="btnSalvar">Salvar</button>
+  </div>
+  <div class="linhaBtn">
+    <button class="btn forte" id="btnFinalizar">Finalizar dia e enviar planilha</button>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   CONFIGURAÇÃO
+   Cole entre as aspas o endereço do Apps Script (INSTALACAO.md,
+   passo 3). Em branco, o app funciona só neste aparelho.
+   ══════════════════════════════════════════════════════════ */
+var API = "";
+var EMAIL_PADRAO = "italo.amaro@consorciorecifeambiental.com.br";
+
+/* ── catálogo de fábrica ── */
+var GRUPOS = ["NOVO","CONSERTO","RECAPADO"];
+var BASE_ITENS = [
+  {id:"n1",  grupo:"NOVO", medida:"275/80",       marca:"Armor Max Goodyear", cod:"OT0082025E70103"},
+  {id:"n2",  grupo:"NOVO", medida:"275/80",       marca:"FG88 Pirelli",       cod:"OT0082025D00335"},
+  {id:"n3",  grupo:"NOVO", medida:"275/80",       marca:"T819 Firestone",     cod:"OT0082025IC0465"},
+  {id:"n4",  grupo:"NOVO", medida:"275/80",       marca:"T822 Firestone",     cod:"OT008A025HT0456"},
+  {id:"n5",  grupo:"NOVO", medida:"275/80",       marca:"R165E Bridgestone",  cod:"OT008A025HG1055"},
+  {id:"n6",  grupo:"NOVO", medida:"235/75",       marca:"G686 Goodyear",      cod:"OT0080044040122"},
+  {id:"n7",  grupo:"NOVO", medida:"225/75",       marca:"G32 Goodyear",       cod:"OT0082021920103"},
+  {id:"n8",  grupo:"NOVO", medida:"215/75",       marca:"Armor Max Goodyear", cod:"OT0082017C70103"},
+  {id:"n9",  grupo:"NOVO", medida:"215/75",       marca:"FG85 Pirelli",       cod:"OT0082033140303"},
+  {id:"n10", grupo:"NOVO", medida:"185/55",       marca:"E.Grip Goodyear",    cod:"OT0082156BB0151"},
+  {id:"n11", grupo:"NOVO", medida:"175/70 R14",   marca:"F580 Firestone",     cod:"OT0082011700403"},
+  {id:"n12", grupo:"NOVO", medida:"165/70",       marca:"F.Energy Pirelli",   cod:"OT0082102D40303"},
+  {id:"n13", grupo:"NOVO", medida:"Moto 2,75x18", marca:"Pirelli",            cod:"OT0082082790303"},
+  {id:"n14", grupo:"NOVO", medida:"Moto 90/90",   marca:"Pirelli",            cod:"OT0082069790303"},
+  {id:"c1", grupo:"CONSERTO", medida:"275/80", marca:"", cod:"OS0027V"},
+  {id:"c2", grupo:"CONSERTO", medida:"235/75", marca:"", cod:"OT0040R33"},
+  {id:"c3", grupo:"CONSERTO", medida:"225/75", marca:"", cod:"OT0040C33"},
+  {id:"c4", grupo:"CONSERTO", medida:"215/75", marca:"", cod:"OT0040633"},
+  {id:"c5", grupo:"CONSERTO", medida:"7.5/16", marca:"", cod:"OT0082007AN0314"},
+  {id:"r1", grupo:"RECAPADO", medida:"295/80", marca:"", cod:"OT0042A30"},
+  {id:"r2", grupo:"RECAPADO", medida:"275/80", marca:"", cod:"OT0042721"},
+  {id:"r3", grupo:"RECAPADO", medida:"235/75", marca:"", cod:"OT0042R31"},
+  {id:"r4", grupo:"RECAPADO", medida:"225/75", marca:"", cod:"OT0040C30"},
+  {id:"r5", grupo:"RECAPADO", medida:"215/75", marca:"", cod:"OT0040630"},
+  {id:"r6", grupo:"RECAPADO", medida:"11R",    marca:"", cod:"OT0040S30"},
+  {id:"r7", grupo:"RECAPADO", medida:"7.5/16", marca:"", cod:"OT0080035F53515"}
+];
+
+var CAMPOS = [
+  {k:"saldo",   rot:"Saldo do sistema"},
+  {k:"contagem",rot:"Contagem"},
+  {k:"entrada", rot:"Entrada"},
+  {k:"me",      rot:"ME"}
+];
+
+/* ── utilidades ── */
+function hojeISO(){ var d=new Date(); return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10); }
+function brl(iso){ return iso ? iso.split("-").reverse().join("/") : ""; }
+function hora(ts){ return ts ? new Date(ts).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : ""; }
+function vazio(){ return {saldo:"",contagem:"",entrada:"",me:"",obs:""}; }
+function num(v){ return (v===""||v==null) ? 0 : (Number(v)||0); }
+function fisicoDe(l){ return num(l.contagem)+num(l.entrada)+num(l.me); }
+function difDe(l){ return fisicoDe(l)-num(l.saldo); }
+function temDado(l){ return !!l && (l.saldo!==""||l.contagem!==""||l.entrada!==""||l.me!==""||l.obs!==""); }
+function conferido(l){ return !!l && l.saldo!=="" && l.contagem!==""; }
+function situacao(l){
+  if(!conferido(l)) return "PENDENTE";
+  var d=difDe(l);
+  return d<0 ? "FALTA" : (d>0 ? "SOBRA" : "OK");
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+/* ── estado ── */
+var E = {aba:"contagem", data:hojeISO(), linhas:{}, fechado:false, itens:[], nome:"",
+         email:EMAIL_PADRAO, aberto:null, datas:[], sinc:null, online:false,
+         tocados:{}, salvando:false, timer:null};
+
+/* ── itens (fábrica + cadastrados) ── */
+function lerItensLocal(){
+  try{ var s=localStorage.getItem("pneus-itens"); return s?JSON.parse(s):null; }catch(e){ return null; }
+}
+function gravarItens(lista){
+  E.itens = lista;
+  try{ localStorage.setItem("pneus-itens", JSON.stringify(lista)); }catch(e){}
+  if(API) apiChamar({acao:"salvarItens", itens:lista}).catch(function(){});
+}
+function porGrupo(g){ return E.itens.filter(function(i){ return i.grupo===g; }); }
+function itemPorId(id){ for(var i=0;i<E.itens.length;i++) if(E.itens[i].id===id) return E.itens[i]; return null; }
+
+/* ── armazenamento local ── */
+function localSalvar(iso,o){ try{ localStorage.setItem("pneus:"+iso, JSON.stringify(o)); }catch(e){} }
+function localLer(iso){ try{ var s=localStorage.getItem("pneus:"+iso); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function localDatas(){
+  var out=[];
+  for(var i=0;i<localStorage.length;i++){
+    var k=localStorage.key(i);
+    if(k && k.indexOf("pneus:")===0){ var d=k.slice(6); if(/^\d{4}-\d{2}-\d{2}$/.test(d)) out.push(d); }
+  }
+  return out.sort().reverse();
+}
+function localApagar(iso){ try{ localStorage.removeItem("pneus:"+iso); }catch(e){} }
+
+/* ── servidor ── */
+function apiChamar(p){
+  if(!API) return Promise.reject("sem-api");
+  return fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:JSON.stringify(p)}).then(function(r){ return r.json(); });
+}
+function servidorLer(iso){ return apiChamar({acao:"ler",data:iso}).then(function(r){ return r.ok?r.dia:null; }); }
+function servidorDatas(){ return apiChamar({acao:"datas"}).then(function(r){ return r.ok?r.datas:[]; }); }
+
+/* ── mesclagem ── */
+function mesclar(remoto, meu, ids){
+  var out=Object.assign({},remoto||{});
+  ids.forEach(function(id){ if(temDado(meu[id])) out[id]=meu[id]; else delete out[id]; });
+  return out;
+}
+
+/* ── avisos ── */
+var avisoTimer;
+function aviso(txt,tipo){
+  var el=document.getElementById("avisos");
+  el.innerHTML = txt ? '<div class="aviso '+(tipo||"ok")+'">'+txt+'</div>' : "";
+  clearTimeout(avisoTimer);
+  if(txt && tipo==="ok") avisoTimer=setTimeout(function(){ el.innerHTML=""; },2800);
+}
+
+/* ── carregar ── */
+function carregarDia(iso){
+  E.tocados={};
+  var loc=localLer(iso);
+  E.linhas=(loc&&loc.linhas)||{};
+  E.fechado=!!(loc&&loc.fechado);
+  E.sinc=loc?{por:loc.porUltimo,em:loc.atualizado}:null;
+  desenhar();
+  if(!API) return;
+  servidorLer(iso).then(function(d){
+    E.online=true;
+    if(d){ E.linhas=d.linhas||{}; E.fechado=!!d.fechado;
+           E.sinc={por:d.porUltimo,em:d.atualizado}; localSalvar(iso,d); }
+    desenhar();
+  }).catch(function(){ E.online=false; desenhar(); });
+}
+function atualizarDatas(){
+  E.datas=localDatas();
+  if(!API){ desenhar(); return; }
+  servidorDatas().then(function(ds){
+    E.datas=ds.concat(E.datas).filter(function(v,i,a){return a.indexOf(v)===i;}).sort().reverse();
+    desenhar();
+  }).catch(function(){});
+}
+
+/* ── salvar ── */
+function salvar(quieto, marcarFechado){
+  if(E.salvando) return Promise.resolve();
+  E.salvando=true;
+  var iso=E.data, ids=Object.keys(E.tocados);
+  var fech=(marcarFechado==null)?E.fechado:marcarFechado;
+  function gravar(remotoLinhas){
+    var juntas=mesclar(remotoLinhas,E.linhas,ids), limpas={};
+    Object.keys(juntas).forEach(function(k){ if(temDado(juntas[k])) limpas[k]=juntas[k]; });
+    var dia={data:iso,linhas:limpas,fechado:fech,porUltimo:E.nome||"sem nome",atualizado:Date.now()};
+    E.linhas=limpas; E.fechado=fech; E.sinc={por:dia.porUltimo,em:dia.atualizado}; E.tocados={};
+    localSalvar(iso,dia);
+    if(!API){ E.salvando=false; if(!quieto) aviso("Contagem salva neste aparelho"); desenhar(); return Promise.resolve(dia); }
+    return apiChamar({acao:"salvar",dia:dia}).then(function(){
+      E.online=true; E.salvando=false;
+      if(!quieto) aviso("Contagem salva para toda a equipe");
+      atualizarDatas(); desenhar(); return dia;
+    }).catch(function(){
+      E.online=false; E.salvando=false;
+      aviso("Sem conexão. Ficou salvo no aparelho e sobe quando a internet voltar.","ruim");
+      desenhar(); return dia;
+    });
+  }
+  if(!API) return gravar(null);
+  return servidorLer(iso).then(function(d){ return gravar(d&&d.linhas); }).catch(function(){ return gravar(null); });
+}
+function agendarSalvar(){ clearTimeout(E.timer); E.timer=setTimeout(function(){ salvar(true,null); },1200); }
+
+/* ── edição ── */
+function setCampo(id,campo,valor){
+  E.tocados[id]=1;
+  var at=Object.assign(vazio(),E.linhas[id]||{});
+  at[campo]=valor; at.por=E.nome||"sem nome"; at.em=Date.now();
+  E.linhas[id]=at;
+  atualizaCard(id); totais(); agendarSalvar();
+}
+function passo(id,delta){
+  E.tocados[id]=1;
+  var at=Object.assign(vazio(),E.linhas[id]||{});
+  at.contagem=String(Math.max(0,num(at.contagem)+delta));
+  at.por=E.nome||"sem nome"; at.em=Date.now();
+  E.linhas[id]=at;
+  var v=document.querySelector('[data-visor="'+id+'"]'); if(v) v.value=at.contagem;
+  atualizaCard(id); totais(); agendarSalvar();
+}
+function atualizaCard(id){
+  var l=E.linhas[id]||vazio(), s=situacao(l), d=difDe(l);
+  var card=document.querySelector('[data-card="'+id+'"]');
+  if(card){
+    card.classList.remove("ok","falta","sobra");
+    if(s==="OK") card.classList.add("ok");
+    else if(s==="FALTA") card.classList.add("falta");
+    else if(s==="SOBRA") card.classList.add("sobra");
+  }
+  var tag=document.querySelector('[data-dif="'+id+'"]');
+  if(tag){
+    tag.className="dif "+(s==="FALTA"?"falta":s==="SOBRA"?"sobra":s==="OK"?"ok":"");
+    tag.textContent = conferido(l) ? (s==="OK"?"confere":(d>0?"+"+d+" sobra":d+" falta")) : "";
+  }
+  var cx=document.querySelector('[data-difcx="'+id+'"]');
+  if(cx){
+    cx.className="difCx "+(s==="FALTA"?"falta":s==="SOBRA"?"sobra":s==="OK"?"ok":"");
+    var vv=cx.querySelector(".difVal");
+    if(vv){ vv.textContent=(d>0?"+":"")+d;
+      vv.style.color = s==="FALTA"?"var(--alerta)":s==="SOBRA"?"var(--aviso)":"var(--sinal)"; }
+  }
+}
+
+/* ── totais ── */
+function calcResumo(){
+  var r={saldo:0,fisico:0,dif:0,itens:0,diverg:0,faltas:0,sobras:0,grupo:{},gente:{}};
+  GRUPOS.forEach(function(g){ r.grupo[g]={fisico:0,dif:0}; });
+  E.itens.forEach(function(it){
+    var l=E.linhas[it.id];
+    if(!temDado(l)) return;
+    r.itens++;
+    r.saldo+=num(l.saldo); r.fisico+=fisicoDe(l); r.dif+=difDe(l);
+    if(l.por) r.gente[l.por]=1;
+    var s=situacao(l);
+    if(s==="FALTA"){ r.diverg++; r.faltas++; }
+    if(s==="SOBRA"){ r.diverg++; r.sobras++; }
+    if(!r.grupo[it.grupo]) r.grupo[it.grupo]={fisico:0,dif:0};
+    r.grupo[it.grupo].fisico+=fisicoDe(l);
+    r.grupo[it.grupo].dif+=difDe(l);
+  });
+  return r;
+}
+function totais(){
+  var r=calcResumo();
+  document.getElementById("tSaldo").textContent=r.saldo;
+  document.getElementById("tFisico").textContent=r.fisico;
+  var d=document.getElementById("tDif");
+  d.textContent=(r.dif>0?"+":"")+r.dif;
+  d.style.color = r.dif<0?"var(--alerta)":(r.dif>0?"var(--aviso)":"var(--sinal)");
+  var dv=document.getElementById("tDiverg");
+  dv.textContent=r.diverg; dv.style.color = r.diverg>0?"var(--alerta)":"";
+  document.getElementById("tItens").innerHTML=r.itens+'<span style="font-size:11px;color:var(--meio)">/'+E.itens.length+'</span>';
+  GRUPOS.concat(Object.keys(r.grupo)).filter(function(v,i,a){return a.indexOf(v)===i;}).forEach(function(g){
+    var el=document.querySelector('[data-resgrupo="'+g+'"]');
+    if(el && r.grupo[g]) el.textContent = r.grupo[g].fisico+" un · dif "+(r.grupo[g].dif>0?"+":"")+r.grupo[g].dif;
+  });
+  document.getElementById("abaDiverg").textContent = "Diferenças"+(r.diverg?" ("+r.diverg+")":"");
+  var s=document.getElementById("txtSync"), p=document.getElementById("pontoSync"), partes=[];
+  partes.push(E.sinc ? "Último: "+E.sinc.por+" às "+hora(E.sinc.em) : "Nada lançado nesta data");
+  var g=Object.keys(r.gente); if(g.length>1) partes.push(g.length+" pessoas");
+  partes.push(API ? (E.online?"sincronizado":"sem conexão") : "só neste aparelho");
+  s.innerHTML=esc(partes.join(" · "))+(E.fechado?' <span class="selo">Finalizado</span>':"");
+  p.className="ponto"+((API&&!E.online)?" off":"");
+}
+
+/* ── desenho ── */
+function desenhar(){
+  document.getElementById("inpData").value=E.data;
+  document.getElementById("btnCracha").textContent=E.nome?("👤 "+E.nome):"Quem é você?";
+  document.getElementById("abaContagem").className=E.aba==="contagem"?"on":"";
+  document.getElementById("abaDiverg").className=E.aba==="diverg"?"on":"";
+  document.getElementById("abaHistorico").className=E.aba==="historico"?"on":"";
+  document.getElementById("abaHistorico").textContent="Histórico ("+E.datas.length+")";
+  document.getElementById("telaContagem").className=E.aba==="contagem"?"":"esconde";
+  document.getElementById("telaDiverg").className=E.aba==="diverg"?"":"esconde";
+  document.getElementById("telaHistorico").className=E.aba==="historico"?"":"esconde";
+  document.getElementById("rodape").className=E.aba==="contagem"?"rodape":"rodape esconde";
+  if(E.aba==="contagem") desenhaContagem();
+  else if(E.aba==="diverg") desenhaDiverg();
+  else desenhaHistorico();
+  totais();
+}
+
+function desenhaContagem(){
+  var h="";
+  var grupos=GRUPOS.slice();
+  E.itens.forEach(function(i){ if(grupos.indexOf(i.grupo)<0) grupos.push(i.grupo); });
+  grupos.forEach(function(g){
+    var lista=porGrupo(g);
+    if(!lista.length) return;
+    h+='<section><div class="grupoTit"><h2>Pneu '+esc(g.toLowerCase())+'</h2><span data-resgrupo="'+esc(g)+'"></span></div>';
+    lista.forEach(function(it){
+      var l=E.linhas[it.id]||vazio(), on=E.aberto===it.id, s=situacao(l), dd=difDe(l);
+      var cls = s==="OK"?"ok":s==="FALTA"?"falta":s==="SOBRA"?"sobra":"";
+      h+='<div class="card'+(on?" on":"")+(cls?" "+cls:"")+'" data-card="'+it.id+'">'+
+        '<div class="cabeca">'+
+          '<button class="medida" data-abre="'+it.id+'">'+
+            '<div class="medidaNome">'+esc(it.medida)+'</div>'+
+            (it.marca?'<div class="medidaMarca">'+esc(it.marca)+'</div>':"")+
+            '<div class="medidaCod">'+esc(l.por?(l.por+" · "+hora(l.em)):it.cod)+'</div>'+
+            '<div class="dif '+cls+'" data-dif="'+it.id+'">'+
+              (conferido(l)?(s==="OK"?"confere":(dd>0?"+"+dd+" sobra":dd+" falta")):"")+'</div>'+
+          '</button>'+
+          '<div class="stepper">'+
+            '<button class="passo" data-menos="'+it.id+'">–</button>'+
+            '<input class="visor" type="number" inputmode="numeric" data-visor="'+it.id+'" value="'+esc(l.contagem)+'" placeholder="0" aria-label="Contagem física">'+
+            '<button class="passo" data-mais="'+it.id+'">+</button>'+
+          '</div>'+
+        '</div>';
+      if(on){
+        h+='<div class="detalhe"><div class="desc">'+esc(it.cod)+' · '+esc(g)+' '+esc(it.medida)+(it.marca?" "+esc(it.marca):"")+'</div><div class="quatro">';
+        CAMPOS.forEach(function(c){
+          h+='<label><span class="rot">'+c.rot+'</span><input type="number" inputmode="numeric" '+
+             'data-campo="'+c.k+'" data-item="'+it.id+'" value="'+esc(l[c.k])+'" placeholder="0"></label>';
+        });
+        h+='</div><div class="difCx '+cls+'" data-difcx="'+it.id+'"><span class="rot">Diferença</span>'+
+           '<span class="difVal" style="color:'+(s==="FALTA"?"var(--alerta)":s==="SOBRA"?"var(--aviso)":"var(--sinal)")+'">'+
+           (dd>0?"+":"")+dd+'</span></div>'+
+           '<div class="dica">Contagem + Entrada + ME − Saldo do sistema.<br>Negativo é falta, positivo é sobra.</div>'+
+           '<textarea data-campo="obs" data-item="'+it.id+'" placeholder="Observação">'+esc(l.obs)+'</textarea>'+
+           (l.por?'<div class="assina">Lançado por '+esc(l.por)+' às '+hora(l.em)+'</div>':"")+
+           (it.novo?'<div class="linhaBtn" style="margin-top:10px"><button class="btn risco" data-excluir="'+it.id+'">Excluir este pneu</button></div>':"")+
+           '</div>';
+      }
+      h+='</div>';
+    });
+    h+='</section>';
+  });
+  document.getElementById("telaContagem").innerHTML=h;
+}
+
+function listaDivergencias(){
+  var out=[];
+  E.itens.forEach(function(it){
+    var l=E.linhas[it.id];
+    if(!temDado(l)) return;
+    var s=situacao(l);
+    if(s==="FALTA"||s==="SOBRA") out.push({it:it,l:l,s:s,d:difDe(l)});
+  });
+  return out.sort(function(a,b){ return a.d-b.d; });
+}
+
+function desenhaDiverg(){
+  var el=document.getElementById("telaDiverg"), lista=listaDivergencias();
+  if(!lista.length){
+    el.innerHTML='<div class="vazioMsg">Nenhuma diferença nesta data.<br>'+
+      'Preencha o saldo do sistema e a contagem de cada pneu para conferir.</div>';
+    return;
+  }
+  var r=calcResumo();
+  var h='<div class="aviso ruim" style="margin-bottom:14px">'+
+    '<strong>'+lista.length+' pneu(s) com diferença</strong><br>'+
+    r.faltas+' com falta · '+r.sobras+' com sobra · saldo geral '+(r.dif>0?"+":"")+r.dif+
+    '</div>';
+  lista.forEach(function(x){
+    var cor = x.s==="FALTA"?"var(--alerta)":"var(--aviso)";
+    h+='<div class="dia" style="border-left:3px solid '+cor+'">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div class="diaData">'+esc(x.it.medida)+(x.it.marca?' <span style="font-size:11px;color:var(--meio)">'+esc(x.it.marca)+'</span>':"")+'</div>'+
+        '<div class="diaInfo">'+esc(x.it.grupo)+' · '+esc(x.it.cod)+'</div>'+
+        '<div class="diaInfo">sistema '+num(x.l.saldo)+' · físico '+fisicoDe(x.l)+
+          (x.l.obs?' · '+esc(x.l.obs):"")+'</div>'+
+      '</div>'+
+      '<div style="text-align:right"><div style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:19px;color:'+cor+'">'+
+        (x.d>0?"+":"")+x.d+'</div>'+
+        '<div class="diaInfo" style="color:'+cor+'">'+(x.s==="FALTA"?"FALTA":"SOBRA")+'</div></div>'+
+      '<button class="diaBtn" data-ir="'+x.it.id+'">Ver</button></div>';
+  });
+  el.innerHTML=h;
+}
+
+function desenhaHistorico(){
+  var el=document.getElementById("telaHistorico");
+  if(!E.datas.length){
+    el.innerHTML='<div class="vazioMsg">Nenhuma contagem salva ainda.</div>'; return;
+  }
+  var h='<button class="btn" id="btnHist" style="width:100%;margin-bottom:14px">Baixar histórico em Excel</button>';
+  E.datas.forEach(function(iso){
+    h+='<div class="dia"><div style="flex:1"><div class="diaData">'+brl(iso)+'</div>'+
+      '<div class="diaInfo">'+(iso===E.data?"aberta agora":"toque em abrir")+'</div></div>'+
+      '<button class="diaBtn" data-abrir="'+iso+'">Abrir</button>'+
+      '<button class="diaBtn" data-apagar="'+iso+'">Apagar</button></div>';
+  });
+  el.innerHTML=h;
+}
+
+/* ── planilha ── */
+function linhasPlanilha(iso, dados){
+  var out=[];
+  E.itens.forEach(function(it){
+    var l=dados[it.id];
+    if(!temDado(l)) return;
+    out.push({"Data":brl(iso),"Grupo":it.grupo,"Medida":it.medida,"Marca":it.marca||"—",
+      "Código":it.cod,"Saldo do sistema":num(l.saldo),"Contagem":num(l.contagem),
+      "Entrada":num(l.entrada),"ME":num(l.me),"Físico total":fisicoDe(l),
+      "Diferença":difDe(l),"Situação":situacao(l),"Observação":l.obs||"",
+      "Lançado por":l.por||"","Hora":hora(l.em)});
+  });
+  return out;
+}
+var LARG=[{wch:11},{wch:11},{wch:14},{wch:22},{wch:18},{wch:15},{wch:10},{wch:9},{wch:7},
+          {wch:12},{wch:11},{wch:11},{wch:30},{wch:16},{wch:7}];
+
+function montarPlanilha(iso,dados){
+  var linhas=linhasPlanilha(iso,dados);
+  if(!linhas.length) return null;
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.json_to_sheet(linhas); ws["!cols"]=LARG;
+  XLSX.utils.book_append_sheet(wb,ws,"Contagem");
+
+  var div=linhas.filter(function(l){ return l["Situação"]==="FALTA"||l["Situação"]==="SOBRA"; });
+  var ws2=XLSX.utils.json_to_sheet(div.length?div:[{"Aviso":"Nenhuma diferença nesta contagem"}]);
+  ws2["!cols"]=div.length?LARG:[{wch:42}];
+  XLSX.utils.book_append_sheet(wb,ws2,"ALERTA - Diferenças");
+
+  var res=[], acc={};
+  linhas.forEach(function(l){
+    var g=l["Grupo"];
+    acc[g]=acc[g]||{s:0,f:0,d:0,falta:0,sobra:0};
+    acc[g].s+=l["Saldo do sistema"]; acc[g].f+=l["Físico total"]; acc[g].d+=l["Diferença"];
+    if(l["Situação"]==="FALTA") acc[g].falta++;
+    if(l["Situação"]==="SOBRA") acc[g].sobra++;
+  });
+  var t={s:0,f:0,d:0,falta:0,sobra:0};
+  Object.keys(acc).forEach(function(g){
+    res.push({"Grupo":g,"Saldo do sistema":acc[g].s,"Físico total":acc[g].f,
+      "Diferença":acc[g].d,"Itens com falta":acc[g].falta,"Itens com sobra":acc[g].sobra});
+    t.s+=acc[g].s; t.f+=acc[g].f; t.d+=acc[g].d; t.falta+=acc[g].falta; t.sobra+=acc[g].sobra;
+  });
+  res.push({"Grupo":"TOTAL GERAL","Saldo do sistema":t.s,"Físico total":t.f,
+    "Diferença":t.d,"Itens com falta":t.falta,"Itens com sobra":t.sobra});
+  var ws3=XLSX.utils.json_to_sheet(res);
+  ws3["!cols"]=[{wch:16},{wch:16},{wch:13},{wch:11},{wch:15},{wch:15}];
+  XLSX.utils.book_append_sheet(wb,ws3,"Resumo");
+  return wb;
+}
+
+function baixarOuCompartilhar(iso,dados){
+  var wb=montarPlanilha(iso,dados);
+  if(!wb){ aviso("Nada preenchido neste dia para enviar.","ruim"); return; }
+  var nome="contagem-pneus-"+iso+".xlsx";
+  var buf=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+  var blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  var r=calcResumo();
+  var texto="Contagem de pneus — "+brl(iso)+"\n"+
+    "Sistema: "+r.saldo+" · Físico: "+r.fisico+" · Diferença: "+(r.dif>0?"+":"")+r.dif+"\n"+
+    (r.diverg ? "ALERTA: "+r.diverg+" pneu(s) com diferença ("+r.faltas+" falta, "+r.sobras+" sobra)"
+              : "Sem diferenças")+"\n"+
+    "Conferido por: "+(Object.keys(r.gente).join(", ")||E.nome);
+  try{
+    var file=new File([blob],nome,{type:blob.type});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:"Contagem de pneus "+brl(iso),text:texto}); return;
+    }
+  }catch(e){}
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=nome; a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); },4000);
+}
+
+/* ── ações ── */
+function finalizarDia(){
+  var r=calcResumo();
+  salvar(true,true).then(function(){
+    if(r.diverg) aviso("<strong>Atenção:</strong> "+r.diverg+" pneu(s) com diferença — "+
+      r.faltas+" falta e "+r.sobras+" sobra. Vão marcados na aba ALERTA da planilha.","ruim");
+    if(API){
+      apiChamar({acao:"enviar",data:E.data,email:E.email}).then(function(res){
+        if(res&&res.ok) aviso("Planilha enviada para "+esc(E.email)+
+          (r.diverg?" com o alerta de "+r.diverg+" diferença(s)":""));
+        else { aviso("O servidor não conseguiu enviar. Baixando aqui.","ruim"); baixarOuCompartilhar(E.data,E.linhas); }
+      }).catch(function(){
+        aviso("Sem resposta do servidor. Baixando a planilha aqui.","ruim");
+        baixarOuCompartilhar(E.data,E.linhas);
+      });
+    } else baixarOuCompartilhar(E.data,E.linhas);
+    desenhar();
+  });
+}
+
+function copiarUltimo(){
+  var ant=null;
+  for(var i=0;i<E.datas.length;i++){ if(E.datas[i]<E.data){ ant=E.datas[i]; break; } }
+  if(!ant){ aviso("Não há contagem anterior a esta data para copiar.","ruim"); return; }
+  function aplica(d){
+    if(!d||!d.linhas){ aviso("Não deu para ler a contagem anterior.","ruim"); return; }
+    var novo={};
+    Object.keys(d.linhas).forEach(function(k){
+      E.tocados[k]=1;
+      novo[k]=Object.assign(vazio(),{saldo:d.linhas[k].saldo,por:E.nome||"sem nome",em:Date.now()});
+    });
+    E.linhas=novo;
+    aviso("Saldos do sistema de "+brl(ant)+" copiados. Agora é só contar.");
+    desenhar(); agendarSalvar();
+  }
+  if(API) servidorLer(ant).then(aplica).catch(function(){ aplica(localLer(ant)); });
+  else aplica(localLer(ant));
+}
+
+function baixarHistorico(){
+  function montar(dias){
+    var tudo=[];
+    dias.forEach(function(d){ if(d&&d.linhas) tudo=tudo.concat(linhasPlanilha(d.data,d.linhas)); });
+    if(!tudo.length){ aviso("Ainda não há contagens salvas para exportar.","ruim"); return; }
+    var wb=XLSX.utils.book_new();
+    var ws=XLSX.utils.json_to_sheet(tudo); ws["!cols"]=LARG;
+    XLSX.utils.book_append_sheet(wb,ws,"Histórico");
+    var div=tudo.filter(function(l){ return l["Situação"]==="FALTA"||l["Situação"]==="SOBRA"; });
+    if(div.length){
+      var ws2=XLSX.utils.json_to_sheet(div); ws2["!cols"]=LARG;
+      XLSX.utils.book_append_sheet(wb,ws2,"ALERTA - Diferenças");
+    }
+    XLSX.writeFile(wb,"contagem-pneus-historico.xlsx");
+  }
+  var ord=E.datas.slice().sort();
+  if(API) Promise.all(ord.map(function(iso){ return servidorLer(iso).catch(function(){ return localLer(iso); }); })).then(montar);
+  else montar(ord.map(localLer));
+}
+
+function apagarDia(iso){
+  localApagar(iso);
+  var fim=function(){
+    atualizarDatas();
+    if(iso===E.data){ E.linhas={}; E.fechado=false; E.sinc=null; E.tocados={}; }
+    fecharModal(); desenhar();
+  };
+  if(API) apiChamar({acao:"apagar",data:iso}).then(fim).catch(fim); else fim();
+}
+
+/* ── modais ── */
+function fecharModal(){ var m=document.getElementById("modal"); if(m) m.remove(); }
+function abrirModal(html){
+  fecharModal();
+  var d=document.createElement("div"); d.className="modal"; d.id="modal";
+  d.innerHTML='<div class="modalCx">'+html+'</div>';
+  d.addEventListener("click",function(ev){ if(ev.target===d) fecharModal(); });
+  document.body.appendChild(d);
+}
+function modalPerfil(){
+  abrirModal('<h3>Seus dados</h3>'+
+    '<p>O nome fica marcado em cada pneu que você lançar. O e-mail recebe a planilha quando o dia é finalizado.</p>'+
+    '<label><span class="rot">Nome</span><input id="mNome" value="'+esc(E.nome)+'" placeholder="ex.: Carlos"></label>'+
+    '<label><span class="rot">E-mail para receber a planilha</span>'+
+    '<input id="mEmail" type="email" inputmode="email" value="'+esc(E.email)+'"></label>'+
+    '<div class="linhaBtn"><button class="btn" id="mCancela">Voltar</button>'+
+    '<button class="btn forte" id="mSalva">Salvar</button></div>');
+  document.getElementById("mCancela").onclick=fecharModal;
+  document.getElementById("mSalva").onclick=function(){
+    var n=document.getElementById("mNome").value.trim(); if(!n) return;
+    E.nome=n; E.email=document.getElementById("mEmail").value.trim()||EMAIL_PADRAO;
+    try{ localStorage.setItem("pneus-config",JSON.stringify({nome:E.nome,email:E.email})); }catch(e){}
+    fecharModal(); desenhar();
+  };
+}
+function modalNovoItem(){
+  var ops=GRUPOS.map(function(g){ return '<option value="'+g+'">Pneu '+g.toLowerCase()+'</option>'; }).join("");
+  abrirModal('<h3>Cadastrar pneu</h3>'+
+    '<p>O pneu novo entra na contagem de todo mundo, a partir da próxima atualização.</p>'+
+    '<label><span class="rot">Grupo</span><select id="iGrupo">'+ops+'</select></label>'+
+    '<label><span class="rot">Medida</span><input id="iMedida" placeholder="ex.: 295/80"></label>'+
+    '<label><span class="rot">Marca / modelo (opcional)</span><input id="iMarca" placeholder="ex.: Armor Max Goodyear"></label>'+
+    '<label><span class="rot">Código</span><input id="iCod" placeholder="ex.: OT00820..."></label>'+
+    '<div id="iErro"></div>'+
+    '<div class="linhaBtn"><button class="btn" id="mCancela">Voltar</button>'+
+    '<button class="btn forte" id="mCria">Cadastrar</button></div>');
+  document.getElementById("mCancela").onclick=fecharModal;
+  document.getElementById("mCria").onclick=function(){
+    var med=document.getElementById("iMedida").value.trim();
+    var cod=document.getElementById("iCod").value.trim().toUpperCase();
+    var err=document.getElementById("iErro");
+    if(!med||!cod){ err.innerHTML='<div class="aviso ruim">Preencha a medida e o código.</div>'; return; }
+    for(var i=0;i<E.itens.length;i++){
+      if(E.itens[i].cod.toUpperCase()===cod){
+        err.innerHTML='<div class="aviso ruim">Esse código já está cadastrado como '+esc(E.itens[i].medida)+'.</div>';
+        return;
+      }
+    }
+    var novo={id:"x"+Date.now().toString(36), grupo:document.getElementById("iGrupo").value,
+      medida:med, marca:document.getElementById("iMarca").value.trim(), cod:cod, novo:true};
+    gravarItens(E.itens.concat([novo]));
+    fecharModal(); E.aberto=novo.id; desenhar();
+    aviso("Pneu "+esc(med)+" cadastrado.");
+  };
+}
+function modalExcluirItem(id){
+  var it=itemPorId(id); if(!it) return;
+  abrirModal('<h3>Excluir pneu</h3>'+
+    '<p><strong style="color:var(--claro)">'+esc(it.medida)+' '+esc(it.marca||"")+'</strong> sai da lista de contagem de todos. '+
+    'As contagens já salvas não mudam.</p>'+
+    '<div class="linhaBtn"><button class="btn" id="mCancela">Voltar</button>'+
+    '<button class="btn risco" id="mExc">Excluir</button></div>');
+  document.getElementById("mCancela").onclick=fecharModal;
+  document.getElementById("mExc").onclick=function(){
+    gravarItens(E.itens.filter(function(x){ return x.id!==id; }));
+    if(E.aberto===id) E.aberto=null;
+    fecharModal(); desenhar();
+  };
+}
+function modalApagar(iso){
+  abrirModal('<h3>Apagar contagem</h3>'+
+    '<p>A contagem de <strong style="color:var(--claro)">'+brl(iso)+'</strong> some para toda a equipe.</p>'+
+    '<div class="linhaBtn"><button class="btn" id="mCancela">Voltar</button>'+
+    '<button class="btn risco" id="mApaga">Apagar</button></div>');
+  document.getElementById("mCancela").onclick=fecharModal;
+  document.getElementById("mApaga").onclick=function(){ apagarDia(iso); };
+}
+
+/* ── eventos ── */
+document.addEventListener("click",function(ev){
+  var t=ev.target, d;
+  if(t.getAttribute){
+    if((d=t.getAttribute("data-mais"))){ passo(d,1); return; }
+    if((d=t.getAttribute("data-menos"))){ passo(d,-1); return; }
+    if((d=t.getAttribute("data-excluir"))){ modalExcluirItem(d); return; }
+    if((d=t.getAttribute("data-abrir"))){ E.data=d; E.aba="contagem"; carregarDia(d); return; }
+    if((d=t.getAttribute("data-apagar"))){ modalApagar(d); return; }
+    if((d=t.getAttribute("data-ir"))){ E.aba="contagem"; E.aberto=d; desenhar();
+      var c=document.querySelector('[data-card="'+d+'"]'); if(c) c.scrollIntoView({block:"center"}); return; }
+  }
+  var abre=t.closest&&t.closest("[data-abre]");
+  if(abre){ var id=abre.getAttribute("data-abre"); E.aberto=(E.aberto===id?null:id); desenhar(); return; }
+  if(t.id==="btnHist"){ baixarHistorico(); return; }
+});
+document.addEventListener("input",function(ev){
+  var t=ev.target, id=t.getAttribute("data-visor");
+  if(id){ setCampo(id,"contagem",t.value); return; }
+  var item=t.getAttribute("data-item"), campo=t.getAttribute("data-campo");
+  if(item&&campo) setCampo(item,campo,t.value);
+});
+document.getElementById("btnCracha").onclick=modalPerfil;
+document.getElementById("btnNovoItem").onclick=modalNovoItem;
+document.getElementById("btnSalvar").onclick=function(){ salvar(false,null); };
+document.getElementById("btnCopiar").onclick=copiarUltimo;
+document.getElementById("btnFinalizar").onclick=finalizarDia;
+document.getElementById("btnAtualizar").onclick=function(){ carregarDia(E.data); atualizarDatas(); aviso("Contagem atualizada"); };
+document.getElementById("inpData").onchange=function(e){ E.data=e.target.value||hojeISO(); carregarDia(E.data); };
+document.getElementById("abaContagem").onclick=function(){ E.aba="contagem"; desenhar(); };
+document.getElementById("abaDiverg").onclick=function(){ E.aba="diverg"; desenhar(); };
+document.getElementById("abaHistorico").onclick=function(){ E.aba="historico"; desenhar(); };
+
+setInterval(function(){
+  if(E.aba==="contagem"&&!document.hidden&&API&&!E.salvando) carregarDia(E.data);
+},20000);
+
+/* ── partida ── */
+(function(){
+  try{
+    var c=JSON.parse(localStorage.getItem("pneus-config")||"{}");
+    E.nome=c.nome||""; E.email=c.email||EMAIL_PADRAO;
+  }catch(e){}
+  E.itens = lerItensLocal() || BASE_ITENS.slice();
+  atualizarDatas(); carregarDia(E.data);
+  if(API){
+    apiChamar({acao:"itens"}).then(function(r){
+      if(r&&r.ok&&r.itens&&r.itens.length){
+        E.itens=r.itens;
+        try{ localStorage.setItem("pneus-itens",JSON.stringify(r.itens)); }catch(e){}
+        desenhar();
+      } else gravarItens(E.itens);
+    }).catch(function(){});
+  }
+  if(!E.nome) setTimeout(modalPerfil,400);
+  if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});
+})();
+</script>
+</body>
+</html>
