@@ -329,5 +329,22 @@
       "createdAt": "2026-09-16T16:35:25.722Z"
     }
   ],
-  "dailyCounts": {}
+  "dailyCounts": {},
+  "suppliers": [
+    {
+      "id": "1a0c9f76bb3pv4qomzi",
+      "name": "Carlos Eduardo",
+      "createdAt": "2026-09-22T16:33:50.000Z"
+    },
+    {
+      "id": "1a0c9f76bb319oizvet",
+      "name": "Dafonte Renovadora",
+      "createdAt": "2026-09-22T16:33:50.000Z"
+    },
+    {
+      "id": "1a0c9f76bb3w0myfb7o",
+      "name": "Renove Pneus",
+      "createdAt": "2026-09-22T16:33:50.000Z"
+    }
+  ]
 }

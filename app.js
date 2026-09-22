@@ -3,22 +3,24 @@
 
 /* ================= constants ================= */
 var CATEGORIES = ["Pneu novo","Pneu conserto","Pneu recapado"];
-var DEFAULT_WAREHOUSES = ["Depósito"];
 var CAT_DOTS = {"Pneu novo":"var(--ok)","Pneu conserto":"var(--warn)","Pneu recapado":"var(--accent)"};
-var STORE_KEY = "tireapp_store_v1";
 
 /* ================= state =================
-   Tudo é salvo em localStorage, no navegador/computador onde o app é aberto.
-   Não há servidor nem sincronização entre dispositivos — é 100% local. */
-var storageAvailable = true;
-var store = null;            // { users:[], warehouses:[], materials:[], movements:[], dailyCounts:{} }
+   Os dados moram no servidor (dados/store.json, no computador que roda "node server.js").
+   Este app é um cliente: carrega o estado por Server-Sent Events (/api/events) e manda
+   toda alteração por POST para a API — assim todo mundo na mesma rede vê tudo em tempo real. */
+var store = null;            // { users:[], warehouses:[], suppliers:[], materials:[], movements:[], dailyCounts:{} }
 var currentUser = null;      // {username, role}
 var materials = [];
 var movements = [];
 var warehouses = [];
+var suppliers = [];
 var users = [];
 var currentPage = "dashboard";
 var seedBannerDismissed = false;
+var evtSource = null;
+var firstStateLoaded = false;
+var countInputTimers = {};
 
 try { seedBannerDismissed = localStorage.getItem('tireapp_seed_dismissed') === '1'; } catch(e){}
 
@@ -69,6 +71,7 @@ async function sha256(text){
   return 'fb_'+(h1>>>0).toString(16)+(h2>>>0).toString(16);
 }
 function warehouseName(id){ var w = warehouses.find(function(x){return x.id===id;}); return w ? w.name : "—"; }
+function supplierNameById(id){ var s = suppliers.find(function(x){return x.id===id;}); return s ? s.name : ""; }
 function materialById(id){ return materials.find(function(x){return x.id===id;}); }
 
 /* ================= modal ================= */
@@ -81,123 +84,78 @@ function openModal(html, onMount){
 }
 function closeModal(){ qs('modalRoot').innerHTML=''; }
 
-/* ================= local storage layer ================= */
-function persistStore(){
-  if(!storageAvailable) return;
-  try{ localStorage.setItem(STORE_KEY, JSON.stringify(store)); }
-  catch(e){ storageAvailable = false; showStorageNotice(); }
-}
-function showStorageNotice(){
-  var el = qs('storageNotice');
-  if(el) el.hidden = false;
-  toast('Não foi possível salvar localmente neste navegador.');
-}
-
-async function buildSeedStore(){
-  var whs = DEFAULT_WAREHOUSES.map(function(name){ return { id:uid(), name:name, createdAt:new Date().toISOString() }; });
-  var depositoId = whs[0].id;
-  var depositoName = whs[0].name;
-
-  // Catálogo real do cliente (código + descrição da planilha enviada).
-  // Categoria inferida a partir da descrição; quantidade começa em 0 —
-  // use Movimentação → Entrada/Ajuste para lançar os quantitativos reais.
-  var sample = [
-    {code:"OS0027V", name:"PNEU CONSERTO 275/80", category:"Pneu conserto"},
-    {code:"OT0040R33", name:"PNEU CONSERTO 235/75", category:"Pneu conserto"},
-    {code:"OT0040C33", name:"PNEU CONSERTO 225/75", category:"Pneu conserto"},
-    {code:"OT0040633", name:"PNEU CONSERTO 215/75", category:"Pneu conserto"},
-    {code:"OT0082007AN0314", name:"PNEU CONSERTO 7.5/16", category:"Pneu conserto"},
-    {code:"OT0042721", name:"PNEU RECAPADO 275/80", category:"Pneu recapado"},
-    {code:"OT0042R31", name:"PNEU RECAPADO 235/75", category:"Pneu recapado"},
-    {code:"OT0040C30", name:"PNEU RECAPADO 225/75", category:"Pneu recapado"},
-    {code:"OT0040630", name:"PNEU RECAPADO 215/75", category:"Pneu recapado"},
-    {code:"OT0080035F53515", name:"PNEU RECAPADO 7.5/16", category:"Pneu recapado"},
-    {code:"OT0042A30", name:"PNEU RECAPADO 295/80", category:"Pneu recapado"},
-    {code:"OT0040S30", name:"PNEU RECAPADO 11R", category:"Pneu recapado"},
-    {code:"OT0080044040122", name:"PNEU NOVO 235/75 G686 GOODYEAR", category:"Pneu novo"},
-    {code:"OT0082011700403", name:"PNEU NOVO 175/70 R14 F580 FIRESTONE", category:"Pneu novo"},
-    {code:"OT0082017C70103", name:"PNEU NOVO 215/75 ARMOR MAX GOODYEAR", category:"Pneu novo"},
-    {code:"OT0082021920103", name:"PNEU NOVO 225/75 G32 GOODYEAR", category:"Pneu novo"},
-    {code:"OT0082025D00335", name:"PNEU NOVO 275/80 FG88 PIRELLI", category:"Pneu novo"},
-    {code:"OT0082025E70103", name:"PNEU NOVO 275/80 ARMOR MAX GOODYEAR", category:"Pneu novo"},
-    {code:"OT0082025IC0465", name:"PNEU NOVO 275/80 T819 FIRESTONE", category:"Pneu novo"},
-    {code:"OT0082033140303", name:"PNEU NOVO 215/75 FG85 PIRELLI", category:"Pneu novo"},
-    {code:"OT0082069790303", name:"PNEU NOVO MOTO 90/90 PIRELLI", category:"Pneu novo"},
-    {code:"OT0082082790303", name:"PNEU NOVO MOTO 2,75X18 PIRELLI", category:"Pneu novo"},
-    {code:"OT0082102D40303", name:"PNEU NOVO 165/70 F.ENERGY PIRELLI", category:"Pneu novo"},
-    {code:"OT0082156BB0151", name:"PNEU NOVO 185/55 E.GRIP GOODYEAR", category:"Pneu novo"},
-    {code:"OT008A025HG1055", name:"PNEU NOVO 275/80 R165E BRIDGESTONE", category:"Pneu novo"},
-    {code:"OT008A025HT0456", name:"PNEU NOVO 275/80 T822 FIRESTONE", category:"Pneu novo"}
-  ];
-  var mats = sample.map(function(s){
-    return { id:uid(), code:s.code, name:s.name, category:s.category, warehouseId:depositoId, warehouseName:depositoName,
-      quantity:0, unit:"UND", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
-  });
-
-  // Sem histórico fictício: como as quantidades reais ainda não foram informadas,
-  // a lista de movimentações começa vazia — cada Entrada/Ajuste feito no app vira histórico real.
-  var moves = [];
-
-  var adminHash = await sha256('admin123');
-  var usersArr = [{ username:'admin', passwordHash:adminHash, role:'admin', createdAt:new Date().toISOString() }];
-
-  return { warehouses:whs, materials:mats, movements:moves, users:usersArr, dailyCounts:{} };
-}
-
-/* Compatibilidade com dados já salvos por uma versão anterior do app:
-   - versões antigas tinham 3 locais de estoque (Depósito / Estoque de Pneus / Borracharia)
-     e um campo de "estoque mínimo" por material — ambos foram removidos do app.
-   Esta função roda a cada carregamento e normaliza dados antigos para o novo formato,
-   sem apagar quantidades (materiais duplicados por código têm as quantidades somadas). */
-function migrateStore(s){
-  if(s.warehouses && s.warehouses.length > 1){
-    var primary = s.warehouses.find(function(w){ return w.name === 'Depósito'; }) || s.warehouses[0];
-    primary.name = 'Depósito';
-    var byCode = {};
-    var merged = [];
-    (s.materials||[]).forEach(function(m){
-      m.warehouseId = primary.id;
-      m.warehouseName = 'Depósito';
-      var key = (m.code||'').toLowerCase();
-      if(byCode[key]){
-        byCode[key].quantity = Number(byCode[key].quantity||0) + Number(m.quantity||0);
-      } else {
-        byCode[key] = m;
-        merged.push(m);
-      }
-    });
-    s.materials = merged;
-    s.warehouses = [primary];
+/* ================= servidor: API + tempo real (SSE) =================
+   apiPost() manda a alteração para o servidor; o próprio servidor recalcula
+   quantidades, valida e — se der certo — avisa TODOS os navegadores conectados
+   (inclusive este) por Server-Sent Events com o estado novo completo. Por isso
+   as funções de tela abaixo não mexem em "materials"/"movements" diretamente:
+   elas só mandam o pedido e esperam a atualização chegar por connectRealtime(). */
+async function apiPost(path, body){
+  try{
+    var res = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})});
+    return await res.json();
+  }catch(err){
+    return {ok:false, error:'Não foi possível falar com o servidor. Verifique se o computador do servidor está ligado e se este dispositivo está na mesma rede.'};
   }
-  (s.materials||[]).forEach(function(m){ delete m.minStock; });
-  if(!s.dailyCounts) s.dailyCounts = {};
-  return s;
 }
 
-async function loadOrSeedStore(){
-  var raw = null;
-  try{ raw = localStorage.getItem(STORE_KEY); }
-  catch(e){ storageAvailable = false; }
+function applyServerState(newStore){
+  store = newStore;
+  materials = store.materials || [];
+  movements = store.movements || [];
+  warehouses = store.warehouses || [];
+  suppliers = store.suppliers || [];
+  users = store.users || [];
+  if(!store.dailyCounts) store.dailyCounts = {};
+}
 
-  if(raw){
-    try{
-      var parsed = JSON.parse(raw);
-      if(parsed && Array.isArray(parsed.users) && Array.isArray(parsed.warehouses) && Array.isArray(parsed.materials) && Array.isArray(parsed.movements)){
-        store = parsed;
-      }
-    }catch(e){ /* dados corrompidos: recria abaixo */ }
-  }
-  if(!store){
-    store = await buildSeedStore();
+function setConnected(ok){
+  var el = qs('connBadge');
+  if(!el) return;
+  if(ok){
+    el.textContent = '🟢 Online — mesma rede';
+    el.className = 'conn-on';
+    el.title = 'Conectado ao servidor. As alterações aparecem em tempo real para todos os dispositivos.';
   } else {
-    store = migrateStore(store);
+    el.textContent = '🔴 Sem conexão com o servidor';
+    el.className = 'conn-off';
+    el.title = 'Não foi possível falar com o servidor agora. Tentando reconectar automaticamente…';
   }
-  persistStore();
-  materials = store.materials;
-  movements = store.movements;
-  warehouses = store.warehouses;
-  users = store.users;
-  if(!storageAvailable) showStorageNotice();
+}
+
+function onFirstStateLoaded(){
+  firstStateLoaded = true;
+  var btn = qs('loginBtn');
+  if(btn){ btn.disabled = false; btn.textContent = 'Entrar'; }
+  var notice = qs('storageNotice');
+  if(notice) notice.hidden = true;
+  if(currentUser){ renderAll(); }
+}
+
+function connectRealtime(){
+  try{ evtSource = new EventSource('/api/events'); }
+  catch(err){ console.error(err); setConnected(false); return; }
+
+  evtSource.onopen = function(){ setConnected(true); };
+  evtSource.onmessage = function(ev){
+    setConnected(true);
+    var data;
+    try{ data = JSON.parse(ev.data); }catch(e){ return; }
+    applyServerState(data);
+    if(!firstStateLoaded){ onFirstStateLoaded(); }
+    else if(currentUser){ renderAll(); }
+  };
+  evtSource.onerror = function(){
+    setConnected(false);
+    if(!firstStateLoaded){
+      var notice = qs('storageNotice');
+      if(notice){
+        notice.textContent = '⚠ Não foi possível conectar ao servidor. Verifique se "iniciar-servidor.bat" está aberto no computador do servidor e se este dispositivo está na mesma rede Wi‑Fi/cabo.';
+        notice.hidden = false;
+      }
+    }
+    // o próprio navegador tenta reconectar automaticamente (EventSource); não precisamos fazer nada aqui.
+  };
 }
 
 /* ================= daily count helpers ================= */
@@ -217,7 +175,9 @@ function renderAll(){
   renderMovementsToday();
   renderHistory();
   renderWarehouses();
+  renderSuppliers();
   renderCount();
+  renderCountHistory();
   renderFilters();
   renderUsers();
 }
@@ -238,9 +198,25 @@ function typePill(t){
   if(t==='transferencia') return '<span class="pill pill-transfer">⇄ Transferência</span>';
   return '<span class="pill pill-adj">⚙ Ajuste</span>';
 }
+function typeLabelText(t){
+  if(t==='entrada') return 'Entrada';
+  if(t==='saida') return 'Saída';
+  if(t==='transferencia') return 'Transferência';
+  return 'Ajuste';
+}
 function movWarehouseLabel(m){
   if(m.type==='transferencia') return esc(m.originWarehouseName||'—') + ' → ' + esc(m.destWarehouseName||'—');
   return esc(m.warehouseName||'—');
+}
+function movWarehouseLabelText(m){
+  if(m.type==='transferencia') return (m.originWarehouseName||'—') + ' → ' + (m.destWarehouseName||'—');
+  return m.warehouseName||'—';
+}
+/* Na Entrada mostramos o fornecedor (de quem recebemos o pneu); nos outros tipos, o ativo
+   (equipamento que recebeu o pneu). As duas coisas dividem a mesma coluna nas tabelas. */
+function assetOrSupplierText(m){
+  if(m.type==='entrada') return m.supplierName || '—';
+  return m.asset || '—';
 }
 
 /* Gráfico de barras (SVG) com as unidades em estoque por categoria. */
@@ -343,31 +319,53 @@ function renderMovementsToday(){
   var body = qs('movTodayBody');
   body.innerHTML = list.length ? list.map(function(m){
     return '<tr><td class="mono">'+fmtDateTime(m.createdAt).split(' ')[1]+'</td><td>'+typePill(m.type)+'</td><td>'+esc(m.materialName)+'</td>'+
-      '<td class="mono">'+esc(m.quantity)+'</td><td class="mono">'+esc(m.asset||'—')+'</td><td>'+esc(m.person||'—')+'</td></tr>';
+      '<td class="mono">'+esc(m.quantity)+'</td><td class="mono">'+esc(assetOrSupplierText(m))+'</td><td>'+esc(m.person||'—')+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="6">Nenhuma movimentação hoje ainda. Use os botões acima para registrar.</td></tr>';
 }
 
-function renderHistory(){
+function getHistoryFilteredList(){
   var q = qs('histSearch').value.trim().toLowerCase();
   var type = qs('histTypeFilter').value;
   var from = qs('histDateFrom').value;
   var to = qs('histDateTo').value;
-  var list = movements.filter(function(m){
+  return movements.filter(function(m){
     if(type && m.type!==type) return false;
     if(from && m.date<from) return false;
     if(to && m.date>to) return false;
     if(q){
-      var hay = ((m.materialName||'')+' '+(m.asset||'')+' '+(m.person||'')).toLowerCase();
+      var hay = ((m.materialName||'')+' '+(m.asset||'')+' '+(m.supplierName||'')+' '+(m.person||'')).toLowerCase();
       if(hay.indexOf(q)===-1) return false;
     }
     return true;
   });
+}
+
+function renderHistory(){
+  var list = getHistoryFilteredList();
   var body = qs('historyBody');
   body.innerHTML = list.length ? list.map(function(m){
     return '<tr><td class="mono">'+fmtDate(m.date)+'</td><td>'+typePill(m.type)+'</td><td>'+esc(m.materialName)+' <span class="mono" style="color:var(--ink-faint);">'+esc(m.materialCode)+'</span></td>'+
-      '<td class="mono">'+esc(m.quantity)+'</td><td class="mono">'+esc(m.asset||'—')+'</td><td>'+movWarehouseLabel(m)+'</td>'+
+      '<td class="mono">'+esc(m.quantity)+'</td><td class="mono">'+esc(assetOrSupplierText(m))+'</td><td>'+movWarehouseLabel(m)+'</td>'+
       '<td>'+esc(m.person||'—')+'</td><td>'+esc(m.note||'—')+'</td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="8">Nenhuma movimentação encontrada para esse filtro.</td></tr>';
+}
+
+function exportHistoryExcel(){
+  var list = getHistoryFilteredList();
+  if(list.length===0){ toast('Não há movimentações para exportar com esse filtro.'); return; }
+  var header = ['Data','Tipo','Código','Material','Qtd.','Ativo / Fornecedor','Depósito','Responsável','Observação'];
+  var rows = list.map(function(m){
+    return [fmtDate(m.date), typeLabelText(m.type), m.materialCode||'', m.materialName||'', Number(m.quantity||0),
+      assetOrSupplierText(m), movWarehouseLabelText(m), m.person||'', m.note||''];
+  });
+  try{
+    var bytes = buildXlsx('Historico', header, rows);
+    var ok = downloadBytes(bytes, 'historico-movimentacoes-'+todayStr()+'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    toast(ok ? 'Planilha do histórico baixada.' : 'Não foi possível gerar o Excel neste ambiente.');
+  }catch(err){
+    console.error(err);
+    toast('Não foi possível gerar o Excel neste ambiente.');
+  }
 }
 
 /* ================= render: daily count (contagem diária) ================= */
@@ -389,17 +387,39 @@ function renderCount(){
   if(progEl) progEl.textContent = counted + ' de ' + materials.length + ' contados hoje';
 
   var body = qs('countBody');
+
+  // Se o usuário estiver digitando numa linha da contagem quando chega uma atualização em
+  // tempo real (de outro dispositivo, ou da própria digitação deste), não queremos perder o
+  // que ele já digitou (ainda não salvo) nem tirar o foco/cursor do campo. Guardamos o valor
+  // "ao vivo" do campo ativo e o restauramos depois de recriar a tabela.
+  var active = document.activeElement;
+  var activeMid = (active && active.classList && active.classList.contains('count-input')) ? active.getAttribute('data-count-material') : null;
+  var activeLiveValue = activeMid ? active.value : null;
+  var activeSelStart = activeMid ? active.selectionStart : null;
+  var activeSelEnd = activeMid ? active.selectionEnd : null;
+
   body.innerHTML = list.length ? list.map(function(m){
     var raw = counts[m.id];
+    var isActiveRow = m.id === activeMid;
+    var displayValue = isActiveRow ? activeLiveValue : (hasCountValue(raw)?esc(raw):'');
+    var diffSource = isActiveRow ? activeLiveValue : raw;
     return '<tr>'+
       '<td class="mono">'+esc(m.code)+'</td>'+
       '<td>'+esc(m.name)+'</td>'+
       '<td>'+esc(m.warehouseName)+'</td>'+
       '<td class="mono">'+esc(m.quantity)+' '+esc(m.unit)+'</td>'+
-      '<td><input type="number" min="0" step="1" inputmode="numeric" class="count-input" data-count-material="'+m.id+'" value="'+(hasCountValue(raw)?esc(raw):'')+'" placeholder="—"></td>'+
-      '<td class="mono" data-diff-cell>'+diffPillHtml(raw, m.quantity)+'</td>'+
+      '<td><input type="number" min="0" step="1" inputmode="numeric" class="count-input" data-count-material="'+m.id+'" value="'+esc(displayValue===null?'':displayValue)+'" placeholder="—"></td>'+
+      '<td class="mono" data-diff-cell>'+diffPillHtml(diffSource, m.quantity)+'</td>'+
     '</tr>';
   }).join('') : '<tr class="empty-row"><td colspan="6">Nenhum material encontrado.</td></tr>';
+
+  if(activeMid){
+    var restored = body.querySelector('[data-count-material="'+activeMid+'"]');
+    if(restored){
+      restored.focus();
+      try{ restored.setSelectionRange(activeSelStart, activeSelEnd); }catch(e){}
+    }
+  }
 }
 
 function diffPillHtml(raw, systemQty){
@@ -407,6 +427,26 @@ function diffPillHtml(raw, systemQty){
   var diff = Number(raw) - Number(systemQty||0);
   if(diff===0) return '<span class="pill pill-ok">0</span>';
   return '<span class="pill pill-low">'+(diff>0?'+':'')+diff+'</span>';
+}
+
+/* Histórico de contagens: cada dia em que alguém digitou pelo menos um valor na contagem
+   fica salvo em store.dailyCounts[data]. Aqui só listamos essas datas para conferir de novo
+   ou baixar o Excel de um dia anterior — a edição continua sendo sempre a do dia de hoje. */
+function renderCountHistory(){
+  var body = qs('countHistoryBody');
+  if(!body) return;
+  var today = todayStr();
+  var dates = Object.keys(store.dailyCounts||{}).filter(function(d){
+    var counts = store.dailyCounts[d]||{};
+    return Object.keys(counts).length>0 || d===today;
+  }).sort().reverse();
+  body.innerHTML = dates.length ? dates.map(function(d){
+    var counts = store.dailyCounts[d]||{};
+    var countedN = materials.filter(function(m){ return hasCountValue(counts[m.id]); }).length;
+    return '<tr><td class="mono">'+fmtDate(d)+(d===today?' <span class="pill pill-in">hoje</span>':'')+'</td>'+
+      '<td class="mono">'+countedN+'/'+materials.length+'</td>'+
+      '<td><div class="row-actions"><button class="btn btn-secondary btn-sm" data-export-count-date="'+d+'">⬇ Excel</button></div></td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="3">Nenhuma contagem registrada ainda.</td></tr>';
 }
 
 /* ================= render: warehouses ================= */
@@ -418,6 +458,16 @@ function renderWarehouses(){
     return '<tr><td>'+esc(w.name)+'</td><td class="mono">'+items.length+'</td><td class="mono">'+units+'</td>'+
       '<td><div class="row-actions"><button class="icon-btn" data-edit-warehouse="'+w.id+'" title="Renomear">✎</button></div></td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="4">Nenhum depósito cadastrado.</td></tr>';
+}
+
+/* ================= render: suppliers (fornecedores) ================= */
+function renderSuppliers(){
+  var body = qs('suppliersBody');
+  if(!body) return;
+  body.innerHTML = suppliers.length ? suppliers.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');}).map(function(s){
+    return '<tr><td>'+esc(s.name)+'</td><td class="mono">'+fmtDate((s.createdAt||'').slice(0,10))+'</td>'+
+      '<td><div class="row-actions"><button class="icon-btn" data-edit-supplier="'+s.id+'" title="Renomear">✎</button></div></td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="3">Nenhum fornecedor cadastrado.</td></tr>';
 }
 
 /* ================= render: users ================= */
@@ -449,6 +499,9 @@ function setPage(page){
 function whOptions(selectedId){
   return warehouses.map(function(w){ return '<option value="'+w.id+'" '+(w.id===selectedId?'selected':'')+'>'+esc(w.name)+'</option>'; }).join('');
 }
+function supplierOptions(selectedId){
+  return suppliers.map(function(s){ return '<option value="'+s.id+'" '+(s.id===selectedId?'selected':'')+'>'+esc(s.name)+'</option>'; }).join('');
+}
 function catOptions(selected){
   return CATEGORIES.map(function(c){ return '<option value="'+esc(c)+'" '+(c===selected?'selected':'')+'>'+esc(c)+'</option>'; }).join('');
 }
@@ -477,7 +530,7 @@ function openMaterialModal(material){
     '</form>';
   openModal(html, function(root){
     root.querySelector('#matCancel').addEventListener('click', closeModal);
-    root.querySelector('#matForm').addEventListener('submit', function(e){
+    root.querySelector('#matForm').addEventListener('submit', async function(e){
       e.preventDefault();
       var errEl = root.querySelector('#matFormError');
       errEl.hidden = true;
@@ -488,20 +541,13 @@ function openMaterialModal(material){
       var unit = root.querySelector('#mUnit').value.trim() || 'UND';
       var qty = Number(root.querySelector('#mQty').value);
       if(!name || !code || !whId){ errEl.textContent='Preencha nome, código e depósito.'; errEl.hidden=false; return; }
-      var dup = materials.find(function(m){ return m.code.toLowerCase()===code.toLowerCase() && m.warehouseId===whId && (!editing || m.id!==material.id); });
-      if(dup){ errEl.textContent='Já existe um material com esse código nesse depósito. Para levar estoque de um código já existente a outro depósito, edite a quantidade por Movimentação → Ajuste.'; errEl.hidden=false; return; }
-      var whName = warehouseName(whId);
-      if(editing){
-        material.name=name; material.code=code; material.category=cat; material.warehouseId=whId;
-        material.warehouseName=whName; material.unit=unit; material.updatedAt=new Date().toISOString();
-        toast('Material atualizado.');
-      } else {
-        materials.push({ id:uid(), name:name, code:code, category:cat, warehouseId:whId, warehouseName:whName, unit:unit,
-          quantity: isNaN(qty)?0:qty, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
-        toast('Material cadastrado.');
-      }
-      persistStore();
-      renderAll();
+      var btn = root.querySelector('#matSave'); btn.disabled = true;
+      var resp = editing
+        ? await apiPost('/api/materials/'+material.id, {name:name, code:code, category:cat, warehouseId:whId, unit:unit})
+        : await apiPost('/api/materials', {name:name, code:code, category:cat, warehouseId:whId, unit:unit, quantity: isNaN(qty)?0:qty});
+      btn.disabled = false;
+      if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível salvar.'; errEl.hidden=false; return; }
+      toast(editing ? 'Material atualizado.' : 'Material cadastrado.');
       closeModal();
     });
   });
@@ -522,23 +568,50 @@ function openWarehouseModal(wh){
     '</form>';
   openModal(html, function(root){
     root.querySelector('#whCancel').addEventListener('click', closeModal);
-    root.querySelector('#whForm').addEventListener('submit', function(e){
+    root.querySelector('#whForm').addEventListener('submit', async function(e){
       e.preventDefault();
       var errEl = root.querySelector('#whFormError'); errEl.hidden=true;
       var name = root.querySelector('#whName').value.trim();
       if(!name){ errEl.textContent='Informe um nome.'; errEl.hidden=false; return; }
-      var dup = warehouses.find(function(w){ return w.name.toLowerCase()===name.toLowerCase() && (!editing||w.id!==wh.id); });
-      if(dup){ errEl.textContent='Já existe um depósito com esse nome.'; errEl.hidden=false; return; }
-      if(editing){
-        wh.name = name;
-        materials.filter(function(m){return m.warehouseId===wh.id;}).forEach(function(m){ m.warehouseName = name; });
-        toast('Depósito renomeado.');
-      } else {
-        warehouses.push({ id:uid(), name:name, createdAt:new Date().toISOString() });
-        toast('Depósito adicionado.');
-      }
-      persistStore();
-      renderAll();
+      var btn = root.querySelector('button[type="submit"]'); btn.disabled = true;
+      var resp = editing
+        ? await apiPost('/api/warehouses/'+wh.id, {name:name})
+        : await apiPost('/api/warehouses', {name:name});
+      btn.disabled = false;
+      if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível salvar.'; errEl.hidden=false; return; }
+      toast(editing ? 'Depósito renomeado.' : 'Depósito adicionado.');
+      closeModal();
+    });
+  });
+}
+
+/* ================= supplier add/edit ================= */
+function openSupplierModal(supplier){
+  var editing = !!supplier;
+  var html =
+    '<h3>'+(editing?'Renomear fornecedor':'Novo fornecedor')+'</h3>'+
+    '<div id="supFormError" class="form-error" hidden></div>'+
+    '<form id="supForm">'+
+      '<div class="field"><label>Nome do fornecedor</label><input id="supName" required value="'+(editing?esc(supplier.name):'')+'" placeholder="ex: Renove Pneus"></div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn btn-secondary" id="supCancel">Cancelar</button>'+
+        '<button type="submit" class="btn btn-primary">'+(editing?'Salvar':'Adicionar')+'</button>'+
+      '</div>'+
+    '</form>';
+  openModal(html, function(root){
+    root.querySelector('#supCancel').addEventListener('click', closeModal);
+    root.querySelector('#supForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      var errEl = root.querySelector('#supFormError'); errEl.hidden=true;
+      var name = root.querySelector('#supName').value.trim();
+      if(!name){ errEl.textContent='Informe um nome.'; errEl.hidden=false; return; }
+      var btn = root.querySelector('button[type="submit"]'); btn.disabled = true;
+      var resp = editing
+        ? await apiPost('/api/suppliers/'+supplier.id, {name:name})
+        : await apiPost('/api/suppliers', {name:name});
+      btn.disabled = false;
+      if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível salvar.'; errEl.hidden=false; return; }
+      toast(editing ? 'Fornecedor renomeado.' : 'Fornecedor adicionado.');
       closeModal();
     });
   });
@@ -552,6 +625,7 @@ function openMovementModal(type){
     ajuste:{title:'Ajuste de estoque', personLabel:'Responsável pela contagem', qtyLabel:'Nova quantidade (contada)'}
   };
   var L = labels[type];
+  var isEntrada = type === 'entrada';
   if(materials.length===0){ toast('Cadastre um material antes de registrar movimentação.'); return; }
 
   var html =
@@ -566,7 +640,11 @@ function openMovementModal(type){
         '<div class="field"><label>Data</label><input id="movDate" type="date" value="'+todayStr()+'" required></div>'+
       '</div>'+
       '<div class="grid2">'+
-        '<div class="field"><label>Ativo <span style="font-weight:400;color:var(--ink-faint);">(opcional)</span></label><input id="movAsset" placeholder="ex: 126.0111"></div>'+
+        (isEntrada ?
+          '<div class="field"><label>Fornecedor <span style="font-weight:400;color:var(--ink-faint);">(opcional)</span></label><select id="movSupplier"><option value="">— selecione —</option>'+supplierOptions()+'</select></div>'
+          :
+          '<div class="field"><label>Ativo <span style="font-weight:400;color:var(--ink-faint);">(opcional)</span></label><input id="movAsset" placeholder="ex: 126.0111"></div>'
+        )+
         '<div class="field"><label>'+L.personLabel+'</label><input id="movPerson" required placeholder="Nome"></div>'+
       '</div>'+
       '<div class="field"><label>Depósito</label><select id="movWh"></select></div>'+
@@ -587,37 +665,26 @@ function openMovementModal(type){
     matSel.addEventListener('change', syncWh);
     syncWh();
     root.querySelector('#movCancel').addEventListener('click', closeModal);
-    root.querySelector('#movForm').addEventListener('submit', function(e){
+    root.querySelector('#movForm').addEventListener('submit', async function(e){
       e.preventDefault();
       var errEl = root.querySelector('#movFormError'); errEl.hidden=true;
       var m = materialById(matSel.value);
       var qtyInput = Number(root.querySelector('#movQty').value);
       var date = root.querySelector('#movDate').value;
-      var asset = root.querySelector('#movAsset').value.trim();
+      var asset = isEntrada ? '' : root.querySelector('#movAsset').value.trim();
+      var supplierId = isEntrada ? root.querySelector('#movSupplier').value : '';
       var person = root.querySelector('#movPerson').value.trim();
       var whId = whSel.value;
       var note = root.querySelector('#movNote').value.trim();
       if(!m || isNaN(qtyInput) || qtyInput<0 || !date || !person){ errEl.textContent='Preencha os campos obrigatórios.'; errEl.hidden=false; return; }
-      var now = new Date().toISOString();
-
-      var prevQty = Number(m.quantity||0);
-      var newQty, delta;
-      if(type==='entrada'){ newQty = prevQty + qtyInput; delta = qtyInput; }
-      else if(type==='saida'){
-        if(qtyInput > prevQty){ errEl.textContent='Quantidade indisponível. Em estoque: '+prevQty+' '+m.unit+'.'; errEl.hidden=false; return; }
-        newQty = prevQty - qtyInput; delta = qtyInput;
-      } else { newQty = qtyInput; delta = qtyInput - prevQty; }
-
-      m.quantity = newQty; m.updatedAt = now;
-      movements.unshift({
-        id:uid(), materialId:m.id, materialCode:m.code, materialName:m.name, type:type,
-        quantity: type==='ajuste' ? Math.abs(delta) : qtyInput,
-        previousQty:prevQty, newQty:newQty, date:date, asset:asset, person:person,
-        warehouseId:whId, warehouseName:warehouseName(whId), note:note,
-        createdAt:now, createdBy:currentUser.username
+      var btn = root.querySelector('button[type="submit"]'); btn.disabled = true;
+      var resp = await apiPost('/api/movements', {
+        type:type, materialId:m.id, quantity:qtyInput, date:date, asset:asset,
+        supplierId:supplierId, person:person, warehouseId:whId, note:note,
+        username: currentUser.username
       });
-      persistStore();
-      renderAll();
+      btn.disabled = false;
+      if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível registrar.'; errEl.hidden=false; return; }
       toast('Movimentação registrada.');
       closeModal();
       setPage('movements');
@@ -648,13 +715,11 @@ function openUserModal(){
       var pass = root.querySelector('#uPass').value;
       var role = root.querySelector('#uRole').value;
       if(!uname || pass.length<4){ errEl.textContent='Usuário obrigatório e senha com ao menos 4 caracteres.'; errEl.hidden=false; return; }
-      var existing = users.find(function(u){return u.username.toLowerCase()===uname;});
-      if(existing){ errEl.textContent='Já existe um usuário com esse nome.'; errEl.hidden=false; return; }
       var btn = root.querySelector('button[type="submit"]'); btn.disabled=true; btn.textContent='Criando…';
       var hash = await sha256(pass);
-      users.push({ username:uname, passwordHash:hash, role:role, createdAt:new Date().toISOString() });
-      persistStore();
-      renderUsers();
+      var resp = await apiPost('/api/users', {username:uname, passwordHash:hash, role:role});
+      btn.disabled=false; btn.textContent='Criar usuário';
+      if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível criar o usuário.'; errEl.hidden=false; return; }
       toast('Usuário criado.');
       closeModal();
     });
@@ -678,11 +743,11 @@ function openResetPasswordModal(username){
       var errEl = root.querySelector('#rpFormError'); errEl.hidden=true;
       var pass = root.querySelector('#rpPass').value;
       if(pass.length<4){ errEl.textContent='Senha muito curta.'; errEl.hidden=false; return; }
-      var u = users.find(function(x){return x.username===username;});
-      if(!u){ errEl.textContent='Usuário não encontrado.'; errEl.hidden=false; return; }
+      var btn = root.querySelector('button[type="submit"]'); btn.disabled = true;
       var hash = await sha256(pass);
-      u.passwordHash = hash;
-      persistStore();
+      var resp = await apiPost('/api/users/'+encodeURIComponent(username)+'/password', {passwordHash:hash});
+      btn.disabled = false;
+      if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível redefinir a senha.'; errEl.hidden=false; return; }
       toast('Senha redefinida.');
       closeModal();
     });
@@ -883,9 +948,9 @@ function downloadBytes(bytes, filename, mime){
   }catch(err){ console.error(err); return false; }
 }
 
-function exportDailyCountExcel(){
-  var today = todayStr();
-  var counts = todayCountMap();
+function exportCountExcel(date){
+  date = date || todayStr();
+  var counts = (store.dailyCounts && store.dailyCounts[date]) ? store.dailyCounts[date] : {};
   var rows = materials.slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }).map(function(m){
     var raw = counts[m.id];
     var has = hasCountValue(raw);
@@ -896,8 +961,8 @@ function exportDailyCountExcel(){
   });
   var header = ['Código','Material','Depósito','Qtd. sistema','Qtd. contada','Diferença'];
   try{
-    var bytes = buildXlsx('Contagem '+today, header, rows);
-    var ok = downloadBytes(bytes, 'contagem-pneus-'+today+'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    var bytes = buildXlsx('Contagem '+date, header, rows);
+    var ok = downloadBytes(bytes, 'contagem-pneus-'+date+'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     toast(ok ? 'Planilha da contagem baixada.' : 'Não foi possível gerar o Excel neste ambiente.');
   }catch(err){
     console.error(err);
@@ -922,6 +987,7 @@ function wireStaticEvents(){
 
   qs('addMaterialBtn').addEventListener('click', function(){ openMaterialModal(null); });
   qs('addWarehouseBtn').addEventListener('click', function(){ openWarehouseModal(null); });
+  qs('addSupplierBtn').addEventListener('click', function(){ openSupplierModal(null); });
   qs('addUserBtn').addEventListener('click', openUserModal);
   qs('exportBackupBtn').addEventListener('click', exportBackup);
   qs('importBackupBtn').addEventListener('click', function(){ qs('importBackupInput').click(); });
@@ -948,9 +1014,10 @@ function wireStaticEvents(){
     qs(id).addEventListener('input', renderHistory);
     qs(id).addEventListener('change', renderHistory);
   });
+  qs('exportHistoryBtn').addEventListener('click', exportHistoryExcel);
 
   qs('countSearch').addEventListener('input', renderCount);
-  qs('exportCountBtn').addEventListener('click', exportDailyCountExcel);
+  qs('exportCountBtn').addEventListener('click', function(){ exportCountExcel(todayStr()); });
   qs('clearCountBtn').addEventListener('click', function(){
     var today = todayStr();
     var counts = todayCountMap();
@@ -964,10 +1031,11 @@ function wireStaticEvents(){
       '</div>';
     openModal(html, function(root){
       root.querySelector('#ccCancel').addEventListener('click', closeModal);
-      root.querySelector('#ccConfirm').addEventListener('click', function(){
-        store.dailyCounts[today] = {};
-        persistStore();
-        renderCount();
+      root.querySelector('#ccConfirm').addEventListener('click', async function(){
+        var btn = root.querySelector('#ccConfirm'); btn.disabled = true;
+        var resp = await apiPost('/api/counts/'+today+'/clear', {});
+        btn.disabled = false;
+        if(!resp.ok){ toast(resp.error || 'Não foi possível limpar a contagem.'); return; }
         toast('Contagem de hoje limpa.');
         closeModal();
       });
@@ -976,19 +1044,19 @@ function wireStaticEvents(){
   qs('countBody').addEventListener('input', function(e){
     var mid = e.target.getAttribute && e.target.getAttribute('data-count-material');
     if(!mid) return;
-    var counts = todayCountMap();
     var val = e.target.value;
-    if(val===''){ delete counts[mid]; } else { counts[mid] = Number(val); }
-    persistStore();
+    // feedback imediato na própria linha, sem esperar o servidor nem redesenhar a tabela toda
     var m = materialById(mid);
     var row = e.target.closest('tr');
     var diffCell = row && row.querySelector('[data-diff-cell]');
     if(diffCell && m){ diffCell.innerHTML = diffPillHtml(val, m.quantity); }
-    var counted = materials.filter(function(mm){ return hasCountValue(counts[mm.id]); }).length;
-    var progEl = qs('countProgress');
-    if(progEl) progEl.textContent = counted + ' de ' + materials.length + ' contados hoje';
-    var statCountEl = qs('statCount');
-    if(statCountEl) statCountEl.textContent = counted + '/' + materials.length;
+
+    clearTimeout(countInputTimers[mid]);
+    countInputTimers[mid] = setTimeout(async function(){
+      var today = todayStr();
+      var resp = await apiPost('/api/counts', {date:today, materialId:mid, value: val===''?null:Number(val)});
+      if(!resp.ok){ toast(resp.error || 'Não foi possível salvar a contagem.'); }
+    }, 350);
   });
 
   qs('content').addEventListener('click', function(e){
@@ -996,6 +1064,10 @@ function wireStaticEvents(){
     if(editId){ openMaterialModal(materialById(editId)); return; }
     var whId = e.target.getAttribute && e.target.getAttribute('data-edit-warehouse');
     if(whId){ openWarehouseModal(warehouses.find(function(w){return w.id===whId;})); return; }
+    var supId = e.target.getAttribute && e.target.getAttribute('data-edit-supplier');
+    if(supId){ openSupplierModal(suppliers.find(function(s){return s.id===supId;})); return; }
+    var exportDate = e.target.getAttribute && e.target.getAttribute('data-export-count-date');
+    if(exportDate){ exportCountExcel(exportDate); return; }
     var resetU = e.target.getAttribute && e.target.getAttribute('data-reset-user');
     if(resetU){ openResetPasswordModal(resetU); return; }
     var delU = e.target.getAttribute && e.target.getAttribute('data-del-user');
@@ -1016,11 +1088,11 @@ function confirmDeleteUser(username){
     '</div>';
   openModal(html, function(root){
     root.querySelector('#delCancel').addEventListener('click', closeModal);
-    root.querySelector('#delConfirm').addEventListener('click', function(){
-      var idx = users.findIndex(function(u){return u.username===username;});
-      if(idx>-1) users.splice(idx,1);
-      persistStore();
-      renderUsers();
+    root.querySelector('#delConfirm').addEventListener('click', async function(){
+      var btn = root.querySelector('#delConfirm'); btn.disabled = true;
+      var resp = await apiPost('/api/users/'+encodeURIComponent(username)+'/delete', {});
+      btn.disabled = false;
+      if(!resp.ok){ toast(resp.error || 'Não foi possível remover o usuário.'); return; }
       toast('Usuário removido.');
       closeModal();
     });
@@ -1062,18 +1134,20 @@ function importBackupFile(file){
       '<h3>Importar backup</h3>'+
       '<p style="color:var(--ink-soft);font-size:13.5px;">Este arquivo tem <b>'+parsed.materials.length+'</b> material(is), '+
       '<b>'+parsed.movements.length+'</b> movimentação(ões), <b>'+parsed.warehouses.length+'</b> depósito(s) e '+
-      '<b>'+parsed.users.length+'</b> usuário(s).<br><br>Importar vai <b>substituir todos os dados atuais</b> deste computador. Essa ação não pode ser desfeita.</p>'+
+      '<b>'+parsed.users.length+'</b> usuário(s).<br><br>Importar vai <b>substituir todos os dados atuais do servidor</b>, para todos os dispositivos conectados na rede. Essa ação não pode ser desfeita.</p>'+
+      '<div id="impFormError" class="form-error" hidden></div>'+
       '<div class="modal-actions">'+
         '<button type="button" class="btn btn-secondary" id="impCancel">Cancelar</button>'+
         '<button type="button" class="btn btn-danger" id="impConfirm">Substituir dados</button>'+
       '</div>';
     openModal(html, function(root){
       root.querySelector('#impCancel').addEventListener('click', closeModal);
-      root.querySelector('#impConfirm').addEventListener('click', function(){
-        store = migrateStore(parsed);
-        materials = store.materials; movements = store.movements; warehouses = store.warehouses; users = store.users;
-        persistStore();
-        renderAll();
+      root.querySelector('#impConfirm').addEventListener('click', async function(){
+        var errEl = root.querySelector('#impFormError');
+        var btn = root.querySelector('#impConfirm'); btn.disabled = true;
+        var resp = await apiPost('/api/backup/import', parsed);
+        btn.disabled = false;
+        if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível importar o backup.'; errEl.hidden = false; return; }
         toast('Backup importado com sucesso.');
         closeModal();
       });
@@ -1096,14 +1170,14 @@ async function doLogin(e){
   var pass = qs('loginPass').value;
   var btn = qs('loginBtn');
   btn.disabled = true; btn.textContent = 'Entrando…';
-  var u = users.find(function(x){return x.username.toLowerCase()===uname;});
   var hash = await sha256(pass);
-  if(!u || hash !== u.passwordHash){
-    showLoginError('Usuário ou senha inválidos.');
+  var resp = await apiPost('/api/login', {username: uname, passwordHash: hash});
+  if(!resp.ok){
+    showLoginError(resp.error || 'Usuário ou senha inválidos.');
     btn.disabled=false; btn.textContent='Entrar';
     return;
   }
-  currentUser = { username: u.username, role: u.role };
+  currentUser = resp.user;
   btn.disabled=false; btn.textContent='Entrar';
   enterApp();
 }
@@ -1129,14 +1203,7 @@ function enterApp(){
 function init(){
   wireStaticEvents();
   qs('loginForm').addEventListener('submit', doLogin);
-  var btn = qs('loginBtn');
-  loadOrSeedStore().then(function(){
-    btn.disabled = false; btn.textContent = 'Entrar';
-  }).catch(function(err){
-    console.error('Erro ao carregar dados locais:', err);
-    btn.disabled = false; btn.textContent = 'Entrar';
-    showLoginError('Ocorreu um problema ao carregar os dados salvos neste navegador. Você ainda pode tentar entrar; se persistir, recarregue a página.');
-  });
+  connectRealtime();
 }
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', init); } else { init(); }
 

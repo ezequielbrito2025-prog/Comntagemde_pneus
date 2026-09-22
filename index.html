@@ -22,7 +22,7 @@
       </div>
       <div id="loginError" class="login-error" hidden></div>
       <div id="storageNotice" class="login-error" style="background:var(--warn-soft);color:var(--warn);" hidden>
-        ⚠ Este navegador não permite salvar dados (modo privado?). O app funciona, mas tudo será perdido ao fechar a aba.
+        ⚠ Não foi possível conectar ao servidor. Verifique se "iniciar-servidor.bat" está aberto no computador do servidor e se este dispositivo está na mesma rede Wi‑Fi/cabo.
       </div>
       <div class="field">
         <label for="loginUser">Usuário</label>
@@ -32,8 +32,8 @@
         <label for="loginPass">Senha</label>
         <input id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password" required>
       </div>
-      <button type="submit" class="btn btn-primary" id="loginBtn" disabled>Carregando…</button>
-      <div class="login-hint">Primeiro acesso? Usuário <b>admin</b>, senha <b>admin123</b>. Crie os usuários da equipe depois, em <b>Usuários</b>.<br>Os dados ficam salvos neste navegador/computador — não são enviados a nenhum servidor.</div>
+      <button type="submit" class="btn btn-primary" id="loginBtn" disabled>Conectando ao servidor…</button>
+      <div class="login-hint">Primeiro acesso? Usuário <b>admin</b>, senha <b>admin123</b>. Crie os usuários da equipe depois, em <b>Usuários</b>.<br>Os dados ficam salvos num computador da rede (o servidor) e aparecem em tempo real para todos os dispositivos conectados na mesma rede.</div>
     </form>
   </div>
 
@@ -71,7 +71,7 @@
       <div id="topbar">
         <button id="hamburger" aria-label="Menu">☰</button>
         <h1 id="pageTitle">Painel</h1>
-        <span id="localBadge" title="Os dados ficam salvos apenas neste navegador">💾 Local</span>
+        <span id="connBadge" class="conn-off" title="Conectando ao servidor…">🔄 Conectando…</span>
         <div class="spacer"></div>
       </div>
 
@@ -145,7 +145,7 @@
           <div class="panel">
             <div class="panel-head"><h2>Movimentações de hoje</h2></div>
             <div class="panel-body pad0 table-wrap">
-              <table><thead><tr><th>Hora</th><th>Tipo</th><th>Material</th><th>Qtd.</th><th>Ativo</th><th>Responsável</th></tr></thead>
+              <table><thead><tr><th>Hora</th><th>Tipo</th><th>Material</th><th>Qtd.</th><th>Ativo / Fornecedor</th><th>Responsável</th></tr></thead>
               <tbody id="movTodayBody"></tbody></table>
             </div>
           </div>
@@ -162,7 +162,7 @@
             <div class="panel-body" style="padding-bottom:0;">
               <p style="margin:0 0 10px;color:var(--ink-soft);font-size:12.5px;">
                 Digite a quantidade contada fisicamente de cada pneu hoje. O app compara com a quantidade cadastrada no
-                sistema e mostra a diferença. Os valores ficam salvos neste navegador — use "Baixar Excel" para conferir ou arquivar a contagem do dia.
+                sistema e mostra a diferença. Os valores ficam salvos no servidor (visíveis para todos os dispositivos, em tempo real) — use "Baixar Excel" para conferir ou arquivar a contagem do dia.
               </p>
               <div class="toolbar">
                 <input type="search" id="countSearch" placeholder="Buscar por nome ou código…">
@@ -174,6 +174,14 @@
               <tbody id="countBody"></tbody></table>
             </div>
           </div>
+
+          <div class="panel">
+            <div class="panel-head"><h2>Histórico de contagens</h2></div>
+            <div class="panel-body pad0 table-wrap">
+              <table><thead><tr><th>Data</th><th>Contados</th><th></th></tr></thead>
+              <tbody id="countHistoryBody"></tbody></table>
+            </div>
+          </div>
         </section>
 
         <!-- ---- HISTORY ---- -->
@@ -181,10 +189,11 @@
           <div class="panel">
             <div class="panel-head">
               <h2>Histórico de movimentações</h2>
+              <button class="btn btn-primary btn-sm" id="exportHistoryBtn">⬇ Baixar Excel (.xlsx)</button>
             </div>
             <div class="panel-body">
               <div class="toolbar">
-                <input type="search" id="histSearch" placeholder="Buscar por material, ativo ou responsável…">
+                <input type="search" id="histSearch" placeholder="Buscar por material, ativo, fornecedor ou responsável…">
                 <select id="histTypeFilter">
                   <option value="">Todos os tipos</option>
                   <option value="entrada">Entrada</option>
@@ -196,7 +205,7 @@
               </div>
             </div>
             <div class="panel-body pad0 table-wrap">
-              <table><thead><tr><th>Data</th><th>Tipo</th><th>Material</th><th>Qtd.</th><th>Ativo</th><th>Depósito</th><th>Responsável</th><th>Obs.</th></tr></thead>
+              <table><thead><tr><th>Data</th><th>Tipo</th><th>Material</th><th>Qtd.</th><th>Ativo / Fornecedor</th><th>Depósito</th><th>Responsável</th><th>Obs.</th></tr></thead>
               <tbody id="historyBody"></tbody></table>
             </div>
           </div>
@@ -212,6 +221,17 @@
             <div class="panel-body pad0 table-wrap">
               <table><thead><tr><th>Nome</th><th>Itens</th><th>Unidades</th><th></th></tr></thead>
               <tbody id="warehousesBody"></tbody></table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Fornecedores</h2>
+              <button class="btn btn-primary btn-sm" id="addSupplierBtn">+ Novo fornecedor</button>
+            </div>
+            <div class="panel-body pad0 table-wrap">
+              <table><thead><tr><th>Nome</th><th>Criado em</th><th></th></tr></thead>
+              <tbody id="suppliersBody"></tbody></table>
             </div>
           </div>
         </section>
@@ -236,9 +256,9 @@
             <div class="panel-head"><h2>Exportar backup</h2></div>
             <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
               <p style="margin:0;color:var(--ink-soft);font-size:13px;">
-                Este app salva os dados só neste navegador/computador — outro PC não enxerga o que foi cadastrado aqui.
-                Exporte um arquivo <code>.json</code> com tudo (materiais, movimentações, depósitos e usuários) para
-                levar para outra máquina, ou guardar como backup.
+                Os dados ficam salvos no servidor (compartilhados entre todos os dispositivos da rede).
+                Exporte um arquivo <code>.json</code> com tudo (materiais, movimentações, depósitos, fornecedores e usuários) para
+                guardar como backup, ou levar para outro servidor.
               </p>
               <div><button class="btn btn-primary btn-sm" id="exportBackupBtn" style="width:auto;">⬇ Exportar backup (.json)</button></div>
             </div>
@@ -248,7 +268,8 @@
             <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
               <p style="margin:0;color:var(--ink-soft);font-size:13px;">
                 Escolha um arquivo <code>.json</code> exportado por este app. <b>Isso substitui todos os dados
-                salvos neste computador</b> — materiais, movimentações, depósitos e usuários (inclusive senhas).
+                salvos no servidor</b> — materiais, movimentações, depósitos e usuários (inclusive senhas) — para
+                todos os dispositivos conectados na rede.
               </p>
               <div>
                 <button class="btn btn-secondary btn-sm" id="importBackupBtn" style="width:auto;">⬆ Escolher arquivo de backup…</button>
