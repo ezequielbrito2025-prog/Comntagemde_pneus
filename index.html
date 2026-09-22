@@ -51,7 +51,7 @@
         <div class="nav-item" data-page="movements"><span class="ic">↕</span>Movimentação</div>
         <div class="nav-item" data-page="count"><span class="ic">🧮</span>Contagem diária</div>
         <div class="nav-item" data-page="history"><span class="ic">🕘</span>Histórico</div>
-        <div class="nav-item" data-page="warehouses"><span class="ic">🏬</span>Depósitos</div>
+        <div class="nav-item" id="navWarehousesItem" data-page="warehouses"><span class="ic">🏬</span>Almoxarifados</div>
         <div class="nav-item" id="navUsersItem" data-page="users"><span class="ic">👤</span>Usuários</div>
         <div class="nav-item" id="navBackupItem" data-page="backup"><span class="ic">💾</span>Backup</div>
       </nav>
@@ -71,6 +71,7 @@
       <div id="topbar">
         <button id="hamburger" aria-label="Menu">☰</button>
         <h1 id="pageTitle">Painel</h1>
+        <select id="whSwitcher" class="wh-switcher" title="Almoxarifado em uso" disabled></select>
         <span id="connBadge" class="conn-off" title="Conectando ao servidor…">🔄 Conectando…</span>
         <div class="spacer"></div>
       </div>
@@ -116,11 +117,11 @@
               <div class="toolbar">
                 <input type="search" id="matSearch" placeholder="Buscar por nome ou código…">
                 <select id="matCatFilter"><option value="">Todas categorias</option></select>
-                <select id="matWhFilter"><option value="">Todos depósitos</option></select>
+                <select id="matWhFilter"><option value="">Todos os almoxarifados</option></select>
               </div>
             </div>
             <div class="panel-body pad0 table-wrap">
-              <table><thead><tr><th>Código</th><th>Material</th><th>Categoria</th><th>Depósito</th><th>Qtd.</th><th>Unid.</th><th></th></tr></thead>
+              <table><thead><tr><th>Código</th><th>Material</th><th>Categoria</th><th>Almoxarifado</th><th>Qtd.</th><th>Unid.</th><th></th></tr></thead>
               <tbody id="materialsBody"></tbody></table>
             </div>
           </div>
@@ -170,7 +171,7 @@
               </div>
             </div>
             <div class="panel-body pad0 table-wrap">
-              <table><thead><tr><th>Código</th><th>Material</th><th>Depósito</th><th>Qtd. sistema</th><th>Qtd. contada hoje</th><th>Diferença</th></tr></thead>
+              <table><thead><tr><th>Código</th><th>Material</th><th>Almoxarifado</th><th>Qtd. sistema</th><th>Qtd. contada hoje</th><th>Diferença</th></tr></thead>
               <tbody id="countBody"></tbody></table>
             </div>
           </div>
@@ -205,7 +206,7 @@
               </div>
             </div>
             <div class="panel-body pad0 table-wrap">
-              <table><thead><tr><th>Data</th><th>Tipo</th><th>Material</th><th>Qtd.</th><th>Ativo / Fornecedor</th><th>Depósito</th><th>Responsável</th><th>Obs.</th></tr></thead>
+              <table><thead><tr><th>Data</th><th>Tipo</th><th>Material</th><th>Qtd.</th><th>Ativo / Fornecedor</th><th>Almoxarifado</th><th>Responsável</th><th>Obs.</th></tr></thead>
               <tbody id="historyBody"></tbody></table>
             </div>
           </div>
@@ -215,8 +216,8 @@
         <section class="page" id="page-warehouses">
           <div class="panel">
             <div class="panel-head">
-              <h2>Depósitos / locais de estoque</h2>
-              <button class="btn btn-primary btn-sm" id="addWarehouseBtn">+ Novo depósito</button>
+              <h2>Almoxarifados</h2>
+              <button class="btn btn-primary btn-sm" id="addWarehouseBtn">+ Novo almoxarifado</button>
             </div>
             <div class="panel-body pad0 table-wrap">
               <table><thead><tr><th>Nome</th><th>Itens</th><th>Unidades</th><th></th></tr></thead>
@@ -244,7 +245,7 @@
               <button class="btn btn-primary btn-sm" id="addUserBtn">+ Novo usuário</button>
             </div>
             <div class="panel-body pad0 table-wrap">
-              <table><thead><tr><th>Usuário</th><th>Perfil</th><th>Criado em</th><th></th></tr></thead>
+              <table><thead><tr><th>Usuário</th><th>Perfil</th><th>Almoxarifado</th><th>Criado em</th><th></th></tr></thead>
               <tbody id="usersBody"></tbody></table>
             </div>
           </div>
@@ -255,20 +256,16 @@
           <div class="panel">
             <div class="panel-head"><h2>Exportar backup</h2></div>
             <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
-              <p style="margin:0;color:var(--ink-soft);font-size:13px;">
-                Os dados ficam salvos no servidor (compartilhados entre todos os dispositivos da rede).
-                Exporte um arquivo <code>.json</code> com tudo (materiais, movimentações, depósitos, fornecedores e usuários) para
-                guardar como backup, ou levar para outro servidor.
-              </p>
+              <p id="exportBackupDesc" style="margin:0;color:var(--ink-soft);font-size:13px;"></p>
               <div><button class="btn btn-primary btn-sm" id="exportBackupBtn" style="width:auto;">⬇ Exportar backup (.json)</button></div>
             </div>
           </div>
-          <div class="panel">
+          <div class="panel" id="importBackupPanel">
             <div class="panel-head"><h2>Importar backup</h2></div>
             <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
               <p style="margin:0;color:var(--ink-soft);font-size:13px;">
                 Escolha um arquivo <code>.json</code> exportado por este app. <b>Isso substitui todos os dados
-                salvos no servidor</b> — materiais, movimentações, depósitos e usuários (inclusive senhas) — para
+                salvos no servidor</b> — materiais, movimentações, almoxarifados e usuários (inclusive senhas) — para
                 todos os dispositivos conectados na rede.
               </p>
               <div>

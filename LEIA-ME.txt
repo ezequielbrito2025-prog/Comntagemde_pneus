@@ -9,9 +9,6 @@ O QUE TEM NESTE PACOTE
                                  (chama "node server.js" por baixo dos panos).
 - index.html / style.css / app.js -> o app em si (a "tela"), servido pelo server.js para qualquer
                                  navegador da rede — você não abre esses arquivos direto.
-- catalogo-pneus-backup.json -> backup de exemplo com os 26 códigos reais da sua planilha de pneus
-                                 (não é mais necessário para começar; o servidor já nasce com esse
-                                 catálogo pronto — veja "Como os dados são salvos" abaixo).
 
 NOVIDADE NESTA VERSÃO: agora existe um servidor. Um computador da rede (o "servidor") roda o
 programa e todos os outros dispositivos (celulares, tablets, outros PCs) acessam pelo navegador,
@@ -55,6 +52,43 @@ COMO EXECUTAR — PASSO A PASSO (Windows)
 7. Login de primeiro acesso: usuário "admin", senha "admin123". Depois crie os usuários da equipe
    em "Usuários".
 
+DOIS ALMOXARIFADOS (Almoxarifado Dois Irmãos e Almoxarifado Muribeca)
+--------------------------------------------------------------------
+O sistema já nasce com dois almoxarifados separados: "Almoxarifado Dois Irmãos" e "Almoxarifado
+Muribeca". Cada um tem seu próprio catálogo de pneus, suas próprias movimentações (entrada/saída/
+ajuste) e sua própria contagem diária — são estoques independentes, mesmo que o código do pneu
+seja parecido (os dois já vêm com os mesmos 26 códigos cadastrados, cada um com sua contagem zerada
+em separado).
+
+- ADMIN: enxerga os dois almoxarifados. No topo da tela aparece um seletor ("Todos os almoxarifados" / um
+  almoxarifado específico). Em "Todos os almoxarifados" o Painel, o Estoque, a Movimentação, a Contagem e o
+  Histórico mostram os dois juntos; escolhendo um almoxarifado específico, tudo fica filtrado só para
+  aquele almoxarifado. É só o admin que tem esse seletor liberado.
+- OPERADOR: fica travado em UM único almoxarifado, escolhido pelo admin ao criar o usuário (tela
+  Usuários → Novo usuário → campo "Almoxarifado"). O operador só vê e só mexe no estoque, nas
+  movimentações, na contagem e no histórico do seu próprio almoxarifado — o seletor aparece travado
+  (cinza) mostrando só o nome do almoxarifado dele. As telas "Almoxarifados" e "Usuários" ficam escondidas
+  para o operador.
+- Para mudar um operador de almoxarifado depois de criado, clique no ícone 🏬 (ao lado do nome dele) na
+  tela "Usuários" e escolha o novo almoxarifado — vale a partir do próximo login dele.
+- BACKUP DO OPERADOR: o operador tem acesso à tela "Backup", mas só pode EXPORTAR — e o arquivo
+  exportado contém apenas os dados do almoxarifado dele (materiais, movimentações e contagens daquele
+  almoxarifado), sem a lista de usuários/senhas do sistema. Só o admin pode importar um backup (a tela de
+  Importar fica escondida para o operador).
+- Ao registrar uma Entrada/Saída/Ajuste, o almoxarifado é sempre o do próprio pneu escolhido (cada
+  material já pertence a um almoxarifado fixo). Para o operador (travado em um só almoxarifado) e
+  para o admin já filtrado num almoxarifado específico, o campo "Almoxarifado" da tela de
+  movimentação é só uma confirmação. Já para o admin em "Todos os almoxarifados", a tela pede
+  primeiro para escolher o almoxarifado e só depois mostra os materiais dele — isso evita
+  escolher sem querer o código errado quando os dois almoxarifados têm o mesmo código de pneu
+  cadastrado.
+- Se você já vinha usando uma versão anterior deste sistema (com um único almoxarifado chamado
+  "Depósito"), pode atualizar sem medo: ao ligar o servidor com esta nova versão, os dados antigos
+  não são apagados nem misturados — o "Depósito" antigo continua existindo do jeito que estava,
+  como um terceiro almoxarifado separado, e os dois novos (Dois Irmãos e Muribeca) são criados do lado.
+  Se quiser, depois é só ir em "Almoxarifados" e renomear o "Depósito" antigo, ou mesclar manualmente os
+  dados como preferir.
+
 IMPORTANTE SOBRE O ENDEREÇO (IP)
 -----------------------------------
 O endereço "http://192.168.0.XX:3000" é o IP do computador servidor NA REDE LOCAL — ele pode mudar
@@ -69,7 +103,7 @@ COMO OS DADOS SÃO SALVOS
 Tudo fica salvo no computador que roda o servidor, num arquivo dentro da pasta "dados" (criada
 automaticamente na primeira vez que o servidor liga: dados/store.json). Esse arquivo é a "fonte da
 verdade" — nenhum dado fica só no celular ou só no navegador de quem está usando. Toda alteração
-(entrada, saída, ajuste, contagem, cadastro de material/depósito/fornecedor/usuário) é enviada
+(entrada, saída, ajuste, contagem, cadastro de material/almoxarifado/fornecedor/usuário) é enviada
 para o servidor, salva nesse arquivo, e repassada em tempo real para todos os dispositivos
 conectados. Se um dispositivo perder a conexão (ex.: saiu do Wi‑Fi), o app mostra "🔴 Sem conexão
 com o servidor" no topo da tela e volta a mostrar "🟢 Online" sozinho assim que a conexão voltar —
@@ -104,16 +138,18 @@ FUNCIONALIDADES
   recapado) e resumo das últimas movimentações — atualiza sozinho quando alguém mexe em qualquer
   dispositivo da rede.
 - Indicador de conexão no topo da tela (🟢 Online / 🔴 Sem conexão).
-- Cadastro de materiais (nome, código, categoria, depósito, quantidade, unidade).
+- Cadastro de materiais (nome, código, categoria, almoxarifado, quantidade, unidade).
 - Registro de Entrada (com fornecedor) / Saída (com ativo) / Ajuste, com data e responsável.
 - Fornecedores: já vem com "Carlos Eduardo", "Dafonte Renovadora" e "Renove Pneus" cadastrados;
-  novos fornecedores podem ser adicionados em Depósitos → Fornecedores.
+  novos fornecedores podem ser adicionados em Almoxarifados → Fornecedores.
 - Contagem diária: tela para digitar a quantidade contada fisicamente de cada pneu no dia,
   comparando com a quantidade do sistema (diferença calculada na hora), com Histórico de
   contagens (uma linha por dia contado) e exportação para Excel (.xlsx) — tanto do dia atual
   quanto de qualquer dia anterior já contado.
-- Um único local de estoque ("Depósito") por padrão — a tela de Depósitos continua disponível
-  caso queira renomear ou cadastrar outros locais.
+- Dois almoxarifados separados (Almoxarifado Dois Irmãos e Almoxarifado Muribeca), cada um com seu
+  próprio estoque, movimentações e contagem — veja a seção "DOIS ALMOXARIFADOS" acima. Admin enxerga
+  os dois (com seletor "Todos os almoxarifados" ou um específico); operador fica travado no almoxarifado
+  que foi atribuído a ele.
 - Histórico completo de movimentações, com filtros e exportação para Excel (.xlsx).
 - Gestão de usuários (login com usuário/senha).
 - Tudo em tempo real: qualquer alteração feita em um dispositivo aparece automaticamente nos

@@ -21,6 +21,12 @@ var seedBannerDismissed = false;
 var evtSource = null;
 var firstStateLoaded = false;
 var countInputTimers = {};
+// Dois almoxarifados físicos separados (Dois Irmãos / Muribeca). Cada operador é travado em um só;
+// o admin enxerga todos e pode alternar entre eles (ou ver "Todos" combinado) por um seletor
+// no topo da tela. activeWarehouseId decide o que as telas do dia a dia (Painel, Estoque,
+// Movimentação, Contagem, Histórico) mostram e em qual almoxarifado uma nova movimentação é lançada.
+var ALL_WAREHOUSES = '__all__';
+var activeWarehouseId = null;
 
 try { seedBannerDismissed = localStorage.getItem('tireapp_seed_dismissed') === '1'; } catch(e){}
 
@@ -56,23 +62,52 @@ function toast(msg){
   clearTimeout(t._h);
   t._h = setTimeout(function(){ t.classList.remove('show'); }, 2600);
 }
-async function sha256(text){
-  try{
-    if(window.crypto && window.crypto.subtle && window.crypto.subtle.digest){
-      var enc = new TextEncoder().encode(text);
-      var buf = await window.crypto.subtle.digest('SHA-256', enc);
-      return 'sha256_'+Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
-    }
-  }catch(e){ /* segue para o fallback */ }
-  // Fallback só para navegadores sem Web Crypto disponível (ex.: contexto não seguro).
-  // Não é criptográfico, mas evita guardar a senha em texto puro.
-  var str = 'tireapp::'+text, h1=0, h2=0;
-  for(var i=0;i<str.length;i++){ var c=str.charCodeAt(i); h1=(Math.imul(31,h1)+c)|0; h2=(Math.imul(131,h2)+c)|0; }
-  return 'fb_'+(h1>>>0).toString(16)+(h2>>>0).toString(16);
-}
 function warehouseName(id){ var w = warehouses.find(function(x){return x.id===id;}); return w ? w.name : "—"; }
 function supplierNameById(id){ var s = suppliers.find(function(x){return x.id===id;}); return s ? s.name : ""; }
 function materialById(id){ return materials.find(function(x){return x.id===id;}); }
+
+/* ================= acesso por almoxarifado ================= */
+function isAdmin(){ return !!(currentUser && currentUser.role === 'admin'); }
+/* Almoxarifados que este usuário pode ver/escolher: o admin vê todos; o operador só o próprio. */
+function visibleWarehouses(){
+  if(isAdmin()) return warehouses;
+  return warehouses.filter(function(w){ return w.id === (currentUser && currentUser.warehouseId); });
+}
+/* Materiais dentro do "escopo" atualmente selecionado (o que as telas do dia a dia mostram). */
+function materialsInScope(){
+  if(isAdmin()){
+    if(activeWarehouseId === ALL_WAREHOUSES) return materials;
+    return materials.filter(function(m){ return m.warehouseId === activeWarehouseId; });
+  }
+  return materials.filter(function(m){ return m.warehouseId === (currentUser && currentUser.warehouseId); });
+}
+function movementsInScope(){
+  if(isAdmin()){
+    if(activeWarehouseId === ALL_WAREHOUSES) return movements;
+    return movements.filter(function(m){ return m.warehouseId === activeWarehouseId; });
+  }
+  return movements.filter(function(m){ return m.warehouseId === (currentUser && currentUser.warehouseId); });
+}
+/* Preenche/atualiza o seletor de almoxarifado no topo da tela: para o admin é um <select> de
+   verdade (com "Todos os almoxarifados" + cada um); para o operador é fixo no almoxarifado dele. */
+function renderWarehouseSwitcher(){
+  var el = qs('whSwitcher');
+  if(!el || !currentUser) return;
+  if(isAdmin()){
+    var valid = activeWarehouseId === ALL_WAREHOUSES || warehouses.find(function(w){ return w.id === activeWarehouseId; });
+    if(!valid) activeWarehouseId = ALL_WAREHOUSES;
+    el.innerHTML = '<option value="'+ALL_WAREHOUSES+'">🏬 Todos os almoxarifados</option>' +
+      warehouses.map(function(w){ return '<option value="'+w.id+'">🏬 '+esc(w.name)+'</option>'; }).join('');
+    el.disabled = false;
+    el.value = activeWarehouseId;
+  } else {
+    activeWarehouseId = currentUser.warehouseId;
+    var mine = warehouses.find(function(w){ return w.id === currentUser.warehouseId; });
+    el.innerHTML = '<option value="'+(mine?mine.id:'')+'">🏬 '+esc(mine?mine.name:'—')+'</option>';
+    el.disabled = true;
+    el.value = mine ? mine.id : '';
+  }
+}
 
 /* ================= modal ================= */
 function openModal(html, onMount){
@@ -133,6 +168,7 @@ function onFirstStateLoaded(){
 }
 
 function connectRealtime(){
+  if(evtSource){ try{ evtSource.close(); }catch(e){} evtSource = null; }
   try{ evtSource = new EventSource('/api/events'); }
   catch(err){ console.error(err); setConnected(false); return; }
 
@@ -141,6 +177,13 @@ function connectRealtime(){
     setConnected(true);
     var data;
     try{ data = JSON.parse(ev.data); }catch(e){ return; }
+    if(data && data.unauthenticated){
+      // Essa conexão não está logada. Se o app achava que estava logado (ex: o servidor
+      // reiniciou e "esqueceu" a sessão), volta pra tela de login em vez de mostrar tudo vazio.
+      if(currentUser){ doLogout('Sua sessão expirou. Faça login novamente.'); }
+      if(!firstStateLoaded){ onFirstStateLoaded(); }
+      return;
+    }
     applyServerState(data);
     if(!firstStateLoaded){ onFirstStateLoaded(); }
     else if(currentUser){ renderAll(); }
@@ -169,6 +212,7 @@ function hasCountValue(v){ return v!==undefined && v!==null && v!==''; }
 
 /* ================= render: dashboard ================= */
 function renderAll(){
+  renderWarehouseSwitcher();
   renderStats();
   renderDashboardPanels();
   renderMaterials();
@@ -180,16 +224,18 @@ function renderAll(){
   renderCountHistory();
   renderFilters();
   renderUsers();
+  renderBackupPage();
 }
 
 function renderStats(){
-  qs('statItems').textContent = materials.length;
-  qs('statUnits').textContent = materials.reduce(function(a,m){return a+Number(m.quantity||0);},0);
+  var mats = materialsInScope(), movs = movementsInScope();
+  qs('statItems').textContent = mats.length;
+  qs('statUnits').textContent = mats.reduce(function(a,m){return a+Number(m.quantity||0);},0);
   var today = todayStr();
-  qs('statToday').textContent = movements.filter(function(m){return m.date===today;}).length;
+  qs('statToday').textContent = movs.filter(function(m){return m.date===today;}).length;
   var counts = (store.dailyCounts && store.dailyCounts[today]) ? store.dailyCounts[today] : {};
-  var countedN = materials.filter(function(m){ return hasCountValue(counts[m.id]); }).length;
-  qs('statCount').textContent = countedN + '/' + materials.length;
+  var countedN = mats.filter(function(m){ return hasCountValue(counts[m.id]); }).length;
+  qs('statCount').textContent = countedN + '/' + mats.length;
 }
 
 function typePill(t){
@@ -223,7 +269,7 @@ function assetOrSupplierText(m){
 function renderCategoryChart(){
   var byCat = {};
   CATEGORIES.forEach(function(c){ byCat[c]=0; });
-  materials.forEach(function(m){ byCat[m.category] = (byCat[m.category]||0) + Number(m.quantity||0); });
+  materialsInScope().forEach(function(m){ byCat[m.category] = (byCat[m.category]||0) + Number(m.quantity||0); });
   var values = CATEGORIES.map(function(c){ return byCat[c]||0; });
   var max = Math.max.apply(null, values.concat([1]));
 
@@ -260,7 +306,7 @@ function renderCategoryChart(){
 
 function renderDashboardPanels(){
   var movBody = qs('dashMovBody');
-  var recent = movements.slice(0,8);
+  var recent = movementsInScope().slice(0,8);
   movBody.innerHTML = recent.length ? recent.map(function(m){
     return '<tr><td class="mono">'+fmtDate(m.date)+'</td><td>'+typePill(m.type)+'</td><td>'+esc(m.materialName)+'</td>'+
       '<td class="mono">'+esc(m.quantity)+'</td><td>'+esc(m.person||'—')+'</td></tr>';
@@ -277,7 +323,7 @@ function renderFilters(){
   }
   var whSel = qs('matWhFilter');
   var current = whSel.value;
-  whSel.innerHTML = '<option value="">Todos depósitos</option>' + warehouses.map(function(w){return '<option value="'+w.id+'">'+esc(w.name)+'</option>';}).join('');
+  whSel.innerHTML = '<option value="">Todos os almoxarifados</option>' + visibleWarehouses().map(function(w){return '<option value="'+w.id+'">'+esc(w.name)+'</option>';}).join('');
   whSel.value = current;
 }
 
@@ -290,9 +336,10 @@ function getMaterialFilters(){
 }
 
 function renderMaterials(){
-  qs('seedBanner').hidden = seedBannerDismissed || materials.length===0;
+  var scoped = materialsInScope();
+  qs('seedBanner').hidden = seedBannerDismissed || scoped.length===0;
   var f = getMaterialFilters();
-  var list = materials.filter(function(m){
+  var list = scoped.filter(function(m){
     if(f.q && !((m.name||'').toLowerCase().indexOf(f.q)>-1 || (m.code||'').toLowerCase().indexOf(f.q)>-1)) return false;
     if(f.cat && m.category!==f.cat) return false;
     if(f.wh && m.warehouseId!==f.wh) return false;
@@ -315,7 +362,7 @@ function renderMaterials(){
 /* ================= render: movements today / history ================= */
 function renderMovementsToday(){
   var today = todayStr();
-  var list = movements.filter(function(m){return m.date===today;});
+  var list = movementsInScope().filter(function(m){return m.date===today;});
   var body = qs('movTodayBody');
   body.innerHTML = list.length ? list.map(function(m){
     return '<tr><td class="mono">'+fmtDateTime(m.createdAt).split(' ')[1]+'</td><td>'+typePill(m.type)+'</td><td>'+esc(m.materialName)+'</td>'+
@@ -328,7 +375,7 @@ function getHistoryFilteredList(){
   var type = qs('histTypeFilter').value;
   var from = qs('histDateFrom').value;
   var to = qs('histDateTo').value;
-  return movements.filter(function(m){
+  return movementsInScope().filter(function(m){
     if(type && m.type!==type) return false;
     if(from && m.date<from) return false;
     if(to && m.date>to) return false;
@@ -353,7 +400,7 @@ function renderHistory(){
 function exportHistoryExcel(){
   var list = getHistoryFilteredList();
   if(list.length===0){ toast('Não há movimentações para exportar com esse filtro.'); return; }
-  var header = ['Data','Tipo','Código','Material','Qtd.','Ativo / Fornecedor','Depósito','Responsável','Observação'];
+  var header = ['Data','Tipo','Código','Material','Qtd.','Ativo / Fornecedor','Almoxarifado','Responsável','Observação'];
   var rows = list.map(function(m){
     return [fmtDate(m.date), typeLabelText(m.type), m.materialCode||'', m.materialName||'', Number(m.quantity||0),
       assetOrSupplierText(m), movWarehouseLabelText(m), m.person||'', m.note||''];
@@ -376,15 +423,16 @@ function renderCount(){
   var searchEl = qs('countSearch');
   var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
   var counts = todayCountMap();
+  var scopedMats = materialsInScope();
 
-  var list = materials.filter(function(m){
+  var list = scopedMats.filter(function(m){
     if(q && !((m.name||'').toLowerCase().indexOf(q)>-1 || (m.code||'').toLowerCase().indexOf(q)>-1)) return false;
     return true;
   }).slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
 
-  var counted = materials.filter(function(m){ return hasCountValue(counts[m.id]); }).length;
+  var counted = scopedMats.filter(function(m){ return hasCountValue(counts[m.id]); }).length;
   var progEl = qs('countProgress');
-  if(progEl) progEl.textContent = counted + ' de ' + materials.length + ' contados hoje';
+  if(progEl) progEl.textContent = counted + ' de ' + scopedMats.length + ' contados hoje';
 
   var body = qs('countBody');
 
@@ -440,11 +488,12 @@ function renderCountHistory(){
     var counts = store.dailyCounts[d]||{};
     return Object.keys(counts).length>0 || d===today;
   }).sort().reverse();
+  var scopedMats = materialsInScope();
   body.innerHTML = dates.length ? dates.map(function(d){
     var counts = store.dailyCounts[d]||{};
-    var countedN = materials.filter(function(m){ return hasCountValue(counts[m.id]); }).length;
+    var countedN = scopedMats.filter(function(m){ return hasCountValue(counts[m.id]); }).length;
     return '<tr><td class="mono">'+fmtDate(d)+(d===today?' <span class="pill pill-in">hoje</span>':'')+'</td>'+
-      '<td class="mono">'+countedN+'/'+materials.length+'</td>'+
+      '<td class="mono">'+countedN+'/'+scopedMats.length+'</td>'+
       '<td><div class="row-actions"><button class="btn btn-secondary btn-sm" data-export-count-date="'+d+'">⬇ Excel</button></div></td></tr>';
   }).join('') : '<tr class="empty-row"><td colspan="3">Nenhuma contagem registrada ainda.</td></tr>';
 }
@@ -457,7 +506,7 @@ function renderWarehouses(){
     var units = items.reduce(function(a,m){return a+Number(m.quantity||0);},0);
     return '<tr><td>'+esc(w.name)+'</td><td class="mono">'+items.length+'</td><td class="mono">'+units+'</td>'+
       '<td><div class="row-actions"><button class="icon-btn" data-edit-warehouse="'+w.id+'" title="Renomear">✎</button></div></td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="4">Nenhum depósito cadastrado.</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="4">Nenhum almoxarifado cadastrado.</td></tr>';
 }
 
 /* ================= render: suppliers (fornecedores) ================= */
@@ -475,12 +524,16 @@ function renderUsers(){
   var body = qs('usersBody');
   if(!body || !currentUser) return;
   body.innerHTML = users.length ? users.slice().sort(function(a,b){return a.username.localeCompare(b.username);}).map(function(u){
+    var whLabel = u.role==='admin' ? '<span style="color:var(--ink-faint);">Todos</span>' : esc(warehouseName(u.warehouseId));
     return '<tr><td>'+esc(u.username)+'</td><td><span class="pill pill-role">'+esc(u.role)+'</span></td>'+
+      '<td>'+whLabel+'</td>'+
       '<td class="mono">'+fmtDate((u.createdAt||'').slice(0,10))+'</td>'+
-      '<td><div class="row-actions"><button class="icon-btn" data-reset-user="'+esc(u.username)+'" title="Redefinir senha">🔑</button>'+
+      '<td><div class="row-actions">'+
+      (u.role!=='admin' ? '<button class="icon-btn" data-change-wh-user="'+esc(u.username)+'" title="Trocar almoxarifado">🏬</button>' : '')+
+      '<button class="icon-btn" data-reset-user="'+esc(u.username)+'" title="Redefinir senha">🔑</button>'+
       (u.username!==currentUser.username ? '<button class="icon-btn" data-del-user="'+esc(u.username)+'" title="Remover">🗑</button>' : '')+
       '</div></td></tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="4">Nenhum usuário.</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="5">Nenhum usuário.</td></tr>';
 }
 
 /* ================= navigation ================= */
@@ -489,7 +542,7 @@ function setPage(page){
   document.querySelectorAll('.nav-item').forEach(function(n){ n.classList.toggle('active', n.dataset.page===page); });
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
   qs('page-'+page).classList.add('active');
-  var titles = {dashboard:'Painel', materials:'Estoque', movements:'Movimentação', count:'Contagem diária', history:'Histórico', warehouses:'Depósitos', users:'Usuários', backup:'Backup'};
+  var titles = {dashboard:'Painel', materials:'Estoque', movements:'Movimentação', count:'Contagem diária', history:'Histórico', warehouses:'Almoxarifados', users:'Usuários', backup:'Backup'};
   qs('pageTitle').textContent = titles[page]||page;
   qs('sidebar').classList.remove('open');
   qs('sidebarScrim').classList.remove('show');
@@ -497,6 +550,11 @@ function setPage(page){
 
 /* ================= material add/edit ================= */
 function whOptions(selectedId){
+  return visibleWarehouses().map(function(w){ return '<option value="'+w.id+'" '+(w.id===selectedId?'selected':'')+'>'+esc(w.name)+'</option>'; }).join('');
+}
+/* Sempre todos os almoxarifados, independente de quem está vendo — só usada em telas
+   estritamente de admin (ex.: trocar o almoxarifado de um operador). */
+function whOptionsAll(selectedId){
   return warehouses.map(function(w){ return '<option value="'+w.id+'" '+(w.id===selectedId?'selected':'')+'>'+esc(w.name)+'</option>'; }).join('');
 }
 function supplierOptions(selectedId){
@@ -508,6 +566,8 @@ function catOptions(selected){
 
 function openMaterialModal(material){
   var editing = !!material;
+  var defaultWhId = editing ? material.warehouseId
+    : (activeWarehouseId && activeWarehouseId!==ALL_WAREHOUSES ? activeWarehouseId : (visibleWarehouses()[0] && visibleWarehouses()[0].id));
   var html =
     '<h3>'+(editing?'Editar material':'Novo material')+'</h3>'+
     '<div id="matFormError" class="form-error" hidden></div>'+
@@ -518,7 +578,7 @@ function openMaterialModal(material){
         '<div class="field"><label>Categoria</label><select id="mCat">'+catOptions(editing?material.category:CATEGORIES[0])+'</select></div>'+
       '</div>'+
       '<div class="grid2">'+
-        '<div class="field"><label>Depósito</label><select id="mWh">'+whOptions(editing?material.warehouseId:(warehouses[0]&&warehouses[0].id))+'</select></div>'+
+        '<div class="field"><label>Almoxarifado</label><select id="mWh">'+whOptions(defaultWhId)+'</select></div>'+
         '<div class="field"><label>Unidade</label><input id="mUnit" value="'+(editing?esc(material.unit):'UND')+'"></div>'+
       '</div>'+
       '<div class="field"><label>Quantidade '+(editing?'atual':'inicial')+'</label><input id="mQty" type="number" min="0" step="1" required value="'+(editing?esc(material.quantity):'0')+'" '+(editing?'disabled':'')+'></div>'+
@@ -540,7 +600,7 @@ function openMaterialModal(material){
       var whId = root.querySelector('#mWh').value;
       var unit = root.querySelector('#mUnit').value.trim() || 'UND';
       var qty = Number(root.querySelector('#mQty').value);
-      if(!name || !code || !whId){ errEl.textContent='Preencha nome, código e depósito.'; errEl.hidden=false; return; }
+      if(!name || !code || !whId){ errEl.textContent='Preencha nome, código e almoxarifado.'; errEl.hidden=false; return; }
       var btn = root.querySelector('#matSave'); btn.disabled = true;
       var resp = editing
         ? await apiPost('/api/materials/'+material.id, {name:name, code:code, category:cat, warehouseId:whId, unit:unit})
@@ -557,10 +617,10 @@ function openMaterialModal(material){
 function openWarehouseModal(wh){
   var editing = !!wh;
   var html =
-    '<h3>'+(editing?'Renomear depósito':'Novo depósito')+'</h3>'+
+    '<h3>'+(editing?'Renomear almoxarifado':'Novo almoxarifado')+'</h3>'+
     '<div id="whFormError" class="form-error" hidden></div>'+
     '<form id="whForm">'+
-      '<div class="field"><label>Nome do depósito</label><input id="whName" required value="'+(editing?esc(wh.name):'')+'" placeholder="ex: Almoxarifado Central"></div>'+
+      '<div class="field"><label>Nome do almoxarifado</label><input id="whName" required value="'+(editing?esc(wh.name):'')+'" placeholder="ex: Almoxarifado Central"></div>'+
       '<div class="modal-actions">'+
         '<button type="button" class="btn btn-secondary" id="whCancel">Cancelar</button>'+
         '<button type="submit" class="btn btn-primary">'+(editing?'Salvar':'Adicionar')+'</button>'+
@@ -579,7 +639,7 @@ function openWarehouseModal(wh){
         : await apiPost('/api/warehouses', {name:name});
       btn.disabled = false;
       if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível salvar.'; errEl.hidden=false; return; }
-      toast(editing ? 'Depósito renomeado.' : 'Depósito adicionado.');
+      toast(editing ? 'Almoxarifado renomeado.' : 'Almoxarifado adicionado.');
       closeModal();
     });
   });
@@ -626,15 +686,28 @@ function openMovementModal(type){
   };
   var L = labels[type];
   var isEntrada = type === 'entrada';
-  if(materials.length===0){ toast('Cadastre um material antes de registrar movimentação.'); return; }
+  /* Quando o admin está em "Todos os almoxarifados", materialsInScope() traz os mesmos códigos
+     repetidos uma vez por almoxarifado — nesse caso pedimos o almoxarifado ANTES do material,
+     pra lista de materiais nunca mostrar duas vezes o mesmo código (o que já causou entradas
+     lançadas sem querer no almoxarifado errado). Fora desse caso (admin filtrado num só
+     almoxarifado, ou operador — que já é travado em um só) a lista já vem de um único
+     almoxarifado, então não tem ambiguidade e o campo Almoxarifado fica só como confirmação. */
+  var needsWhPicker = isAdmin() && activeWarehouseId === ALL_WAREHOUSES;
+  var lockedWhId = needsWhPicker ? null : (isAdmin() ? activeWarehouseId : (currentUser && currentUser.warehouseId));
+  var emptyCheck = needsWhPicker ? materials : materialsInScope();
+  if(emptyCheck.length===0){ toast('Cadastre um material antes de registrar movimentação.'); return; }
+  var firstWhId = needsWhPicker ? visibleWarehouses()[0].id : lockedWhId;
 
   var html =
     '<h3>'+L.title+'</h3>'+
     '<div id="movFormError" class="form-error" hidden></div>'+
     '<form id="movForm">'+
-      '<div class="field"><label>Material</label><select id="movMaterial" required>'+
-        materials.map(function(m){return '<option value="'+m.id+'">'+esc(m.code)+' — '+esc(m.name)+' ('+m.quantity+' '+esc(m.unit)+' em '+esc(m.warehouseName)+')</option>';}).join('')+
-      '</select></div>'+
+      (needsWhPicker ?
+        '<div class="field"><label>Almoxarifado</label><select id="movWh" required>'+whOptions(firstWhId)+'</select><div class="helptext">Escolha o almoxarifado antes do material — a lista abaixo mostra só os itens dele.</div></div>'
+        :
+        '<div class="field"><label>Almoxarifado</label><select id="movWh" disabled></select><div class="helptext">Determinado automaticamente (o do seu almoxarifado).</div></div>'
+      )+
+      '<div class="field"><label>Material</label><select id="movMaterial" required></select></div>'+
       '<div class="grid2">'+
         '<div class="field"><label>'+L.qtyLabel+'</label><input id="movQty" type="number" min="0" step="1" required></div>'+
         '<div class="field"><label>Data</label><input id="movDate" type="date" value="'+todayStr()+'" required></div>'+
@@ -647,7 +720,6 @@ function openMovementModal(type){
         )+
         '<div class="field"><label>'+L.personLabel+'</label><input id="movPerson" required placeholder="Nome"></div>'+
       '</div>'+
-      '<div class="field"><label>Depósito</label><select id="movWh"></select></div>'+
       '<div class="field"><label>Observação <span style="font-weight:400;color:var(--ink-faint);">(opcional)</span></label><input id="movNote" placeholder="ex: reposição mensal"></div>'+
       '<div class="modal-actions">'+
         '<button type="button" class="btn btn-secondary" id="movCancel">Cancelar</button>'+
@@ -657,13 +729,17 @@ function openMovementModal(type){
   openModal(html, function(root){
     var matSel = root.querySelector('#movMaterial');
     var whSel = root.querySelector('#movWh');
-    function syncWh(){
-      var m = materialById(matSel.value);
-      if(!m) return;
-      whSel.innerHTML = whOptions(m.warehouseId);
+    function renderMatOptions(whId){
+      var list = needsWhPicker ? materials.filter(function(m){ return m.warehouseId === whId; }) : materialsInScope();
+      matSel.innerHTML = list.map(function(m){return '<option value="'+m.id+'">'+esc(m.code)+' — '+esc(m.name)+' ('+m.quantity+' '+esc(m.unit)+')</option>';}).join('');
     }
-    matSel.addEventListener('change', syncWh);
-    syncWh();
+    if(needsWhPicker){
+      renderMatOptions(whSel.value);
+      whSel.addEventListener('change', function(){ renderMatOptions(whSel.value); });
+    } else {
+      whSel.innerHTML = whOptions(lockedWhId);
+      renderMatOptions(lockedWhId);
+    }
     root.querySelector('#movCancel').addEventListener('click', closeModal);
     root.querySelector('#movForm').addEventListener('submit', async function(e){
       e.preventDefault();
@@ -701,26 +777,63 @@ function openUserModal(){
       '<div class="field"><label>Usuário</label><input id="uUser" required placeholder="ex: joao.silva"></div>'+
       '<div class="field"><label>Senha</label><input id="uPass" type="password" required minlength="4"></div>'+
       '<div class="field"><label>Perfil</label><select id="uRole"><option value="operador">Operador</option><option value="admin">Administrador</option></select></div>'+
+      '<div class="field" id="uWhField"><label>Almoxarifado</label><select id="uWh">'+whOptionsAll()+'</select>'+
+        '<div class="helptext">O operador só vê e mexe nesse almoxarifado. Administradores têm acesso a todos, sem precisar escolher.</div></div>'+
       '<div class="modal-actions">'+
         '<button type="button" class="btn btn-secondary" id="uCancel">Cancelar</button>'+
         '<button type="submit" class="btn btn-primary">Criar usuário</button>'+
       '</div>'+
     '</form>';
   openModal(html, function(root){
+    var roleSel = root.querySelector('#uRole');
+    var whField = root.querySelector('#uWhField');
+    function syncWhField(){ whField.hidden = roleSel.value !== 'operador'; }
+    roleSel.addEventListener('change', syncWhField);
+    syncWhField();
     root.querySelector('#uCancel').addEventListener('click', closeModal);
     root.querySelector('#userForm').addEventListener('submit', async function(e){
       e.preventDefault();
       var errEl = root.querySelector('#userFormError'); errEl.hidden=true;
       var uname = root.querySelector('#uUser').value.trim().toLowerCase();
       var pass = root.querySelector('#uPass').value;
-      var role = root.querySelector('#uRole').value;
+      var role = roleSel.value;
+      var whId = root.querySelector('#uWh').value;
       if(!uname || pass.length<4){ errEl.textContent='Usuário obrigatório e senha com ao menos 4 caracteres.'; errEl.hidden=false; return; }
+      if(role==='operador' && !whId){ errEl.textContent='Selecione o almoxarifado do operador.'; errEl.hidden=false; return; }
       var btn = root.querySelector('button[type="submit"]'); btn.disabled=true; btn.textContent='Criando…';
-      var hash = await sha256(pass);
-      var resp = await apiPost('/api/users', {username:uname, passwordHash:hash, role:role});
+      var resp = await apiPost('/api/users', {username:uname, password:pass, role:role, warehouseId: role==='operador'?whId:''});
       btn.disabled=false; btn.textContent='Criar usuário';
       if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível criar o usuário.'; errEl.hidden=false; return; }
       toast('Usuário criado.');
+      closeModal();
+    });
+  });
+}
+/* ================= trocar almoxarifado de um operador ================= */
+function openChangeUserWarehouseModal(username){
+  var u = users.find(function(x){return x.username===username;});
+  if(!u) return;
+  var html =
+    '<h3>Trocar almoxarifado — '+esc(username)+'</h3>'+
+    '<div id="cwFormError" class="form-error" hidden></div>'+
+    '<form id="cwForm">'+
+      '<div class="field"><label>Almoxarifado</label><select id="cwWh">'+whOptionsAll(u.warehouseId)+'</select></div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn btn-secondary" id="cwCancel">Cancelar</button>'+
+        '<button type="submit" class="btn btn-primary">Salvar</button>'+
+      '</div>'+
+    '</form>';
+  openModal(html, function(root){
+    root.querySelector('#cwCancel').addEventListener('click', closeModal);
+    root.querySelector('#cwForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      var errEl = root.querySelector('#cwFormError'); errEl.hidden=true;
+      var whId = root.querySelector('#cwWh').value;
+      var btn = root.querySelector('button[type="submit"]'); btn.disabled = true;
+      var resp = await apiPost('/api/users/'+encodeURIComponent(username)+'/warehouse', {warehouseId:whId});
+      btn.disabled = false;
+      if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível trocar o almoxarifado.'; errEl.hidden=false; return; }
+      toast('Almoxarifado atualizado.');
       closeModal();
     });
   });
@@ -744,8 +857,7 @@ function openResetPasswordModal(username){
       var pass = root.querySelector('#rpPass').value;
       if(pass.length<4){ errEl.textContent='Senha muito curta.'; errEl.hidden=false; return; }
       var btn = root.querySelector('button[type="submit"]'); btn.disabled = true;
-      var hash = await sha256(pass);
-      var resp = await apiPost('/api/users/'+encodeURIComponent(username)+'/password', {passwordHash:hash});
+      var resp = await apiPost('/api/users/'+encodeURIComponent(username)+'/password', {password:pass});
       btn.disabled = false;
       if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível redefinir a senha.'; errEl.hidden=false; return; }
       toast('Senha redefinida.');
@@ -951,7 +1063,7 @@ function downloadBytes(bytes, filename, mime){
 function exportCountExcel(date){
   date = date || todayStr();
   var counts = (store.dailyCounts && store.dailyCounts[date]) ? store.dailyCounts[date] : {};
-  var rows = materials.slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }).map(function(m){
+  var rows = materialsInScope().slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); }).map(function(m){
     var raw = counts[m.id];
     var has = hasCountValue(raw);
     var sysQty = Number(m.quantity||0);
@@ -959,7 +1071,7 @@ function exportCountExcel(date){
     var diff = has ? (Number(raw) - sysQty) : '—';
     return [m.code, m.name, m.warehouseName, sysQty, countedQty, diff];
   });
-  var header = ['Código','Material','Depósito','Qtd. sistema','Qtd. contada','Diferença'];
+  var header = ['Código','Material','Almoxarifado','Qtd. sistema','Qtd. contada','Diferença'];
   try{
     var bytes = buildXlsx('Contagem '+date, header, rows);
     var ok = downloadBytes(bytes, 'contagem-pneus-'+date+'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1021,10 +1133,14 @@ function wireStaticEvents(){
   qs('clearCountBtn').addEventListener('click', function(){
     var today = todayStr();
     var counts = todayCountMap();
-    if(Object.keys(counts).length===0){ toast('A contagem de hoje já está vazia.'); return; }
+    var scopedIds = {}; materialsInScope().forEach(function(m){ scopedIds[m.id]=true; });
+    var scopedCount = Object.keys(counts).filter(function(k){ return scopedIds[k]; }).length;
+    if(scopedCount===0){ toast('A contagem de hoje já está vazia.'); return; }
+    var whId = activeWarehouseId;
+    var scopeLabel = (isAdmin() && whId===ALL_WAREHOUSES) ? 'de TODOS os almoxarifados' : ('do almoxarifado '+esc(warehouseName(whId)));
     var html =
       '<h3>Limpar contagem de hoje</h3>'+
-      '<p style="color:var(--ink-soft);font-size:13.5px;">Isso apaga todos os valores digitados na contagem de <b>'+fmtDate(today)+'</b>. Essa ação não pode ser desfeita.</p>'+
+      '<p style="color:var(--ink-soft);font-size:13.5px;">Isso apaga os valores digitados na contagem '+scopeLabel+' de <b>'+fmtDate(today)+'</b>. Essa ação não pode ser desfeita.</p>'+
       '<div class="modal-actions">'+
         '<button type="button" class="btn btn-secondary" id="ccCancel">Cancelar</button>'+
         '<button type="button" class="btn btn-danger" id="ccConfirm">Limpar</button>'+
@@ -1033,7 +1149,7 @@ function wireStaticEvents(){
       root.querySelector('#ccCancel').addEventListener('click', closeModal);
       root.querySelector('#ccConfirm').addEventListener('click', async function(){
         var btn = root.querySelector('#ccConfirm'); btn.disabled = true;
-        var resp = await apiPost('/api/counts/'+today+'/clear', {});
+        var resp = await apiPost('/api/counts/'+today+'/clear', {warehouseId: whId});
         btn.disabled = false;
         if(!resp.ok){ toast(resp.error || 'Não foi possível limpar a contagem.'); return; }
         toast('Contagem de hoje limpa.');
@@ -1072,6 +1188,13 @@ function wireStaticEvents(){
     if(resetU){ openResetPasswordModal(resetU); return; }
     var delU = e.target.getAttribute && e.target.getAttribute('data-del-user');
     if(delU){ confirmDeleteUser(delU); return; }
+    var chWhUser = e.target.getAttribute && e.target.getAttribute('data-change-wh-user');
+    if(chWhUser){ openChangeUserWarehouseModal(chWhUser); return; }
+  });
+
+  qs('whSwitcher').addEventListener('change', function(){
+    activeWarehouseId = this.value;
+    renderAll();
   });
 }
 
@@ -1100,9 +1223,62 @@ function confirmDeleteUser(username){
 }
 
 /* ================= backup: export / import ================= */
+function slugify(s){
+  var v = String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-+|-+$)/g,'');
+  return v || 'armazem';
+}
+/* Ajusta os textos e mostra/esconde o painel de "Importar backup" conforme o perfil: o
+   operador só pode exportar um arquivo com os dados do PRÓPRIO almoxarifado (registro/arquivo
+   pessoal); importar é uma ação administrativa (substitui os dados de todo o sistema) e
+   continua disponível só para o admin. */
+function renderBackupPage(){
+  var desc = qs('exportBackupDesc');
+  if(!desc || !currentUser) return;
+  var impPanel = qs('importBackupPanel');
+  if(isAdmin()){
+    desc.textContent = 'Os dados ficam salvos no servidor (compartilhados entre todos os dispositivos da rede). Exporte um arquivo .json com tudo (materiais, movimentações, almoxarifados, fornecedores e usuários) para guardar como backup, ou levar para outro servidor.';
+    if(impPanel) impPanel.hidden = false;
+  } else {
+    desc.textContent = 'Exporte um arquivo .json com os dados do seu almoxarifado ('+warehouseName(currentUser.warehouseId)+'): materiais, movimentações e contagens — útil como registro/arquivo pessoal. A importação de backup mexe nos dados de todo o sistema, por isso fica disponível só para o administrador.';
+    if(impPanel) impPanel.hidden = true;
+  }
+}
 async function exportBackup(){
-  var payload = JSON.stringify(store, null, 2);
-  var filename = 'estoque-pneus-backup-' + todayStr() + '.json';
+  var payload, filename;
+  if(isAdmin()){
+    // Os dados que chegam por tempo real (SSE) nunca trazem o hash da senha de ninguém — por
+    // segurança, isso não fica trafegando com todo mundo conectado. Só essa rota (que exige
+    // login de admin) devolve o backup completo de verdade, pra continuar dando pra restaurar
+    // (com login funcionando) depois.
+    var fullResp = await fetch('/api/backup/export');
+    var full = await fullResp.json();
+    if(!full || full.ok === false){
+      toast((full && full.error) || 'Não foi possível gerar o backup.');
+      return;
+    }
+    payload = JSON.stringify(full, null, 2);
+    filename = 'estoque-pneus-backup-' + todayStr() + '.json';
+  } else {
+    var whId = currentUser.warehouseId;
+    var wh = warehouses.find(function(w){ return w.id===whId; });
+    var scopedMats = materials.filter(function(m){ return m.warehouseId===whId; });
+    var matIds = {}; scopedMats.forEach(function(m){ matIds[m.id]=true; });
+    var scopedMovs = movements.filter(function(m){ return m.warehouseId===whId; });
+    var scopedCounts = {};
+    Object.keys(store.dailyCounts||{}).forEach(function(date){
+      var dayCounts = store.dailyCounts[date]||{};
+      var filtered = {};
+      Object.keys(dayCounts).forEach(function(mid){ if(matIds[mid]) filtered[mid]=dayCounts[mid]; });
+      if(Object.keys(filtered).length) scopedCounts[date]=filtered;
+    });
+    var data = {
+      scope: 'armazem', warehouseId: whId, warehouseName: wh?wh.name:'',
+      exportedAt: new Date().toISOString(), exportedBy: currentUser.username,
+      warehouses: wh?[wh]:[], suppliers: suppliers, materials: scopedMats, movements: scopedMovs, dailyCounts: scopedCounts
+    };
+    payload = JSON.stringify(data, null, 2);
+    filename = 'backup-' + slugify(wh?wh.name:'armazem') + '-' + todayStr() + '.json';
+  }
   try{
     if(window.claude && typeof window.claude.use === 'function'){
       var downloads = await window.claude.use('downloads');
@@ -1133,7 +1309,7 @@ function importBackupFile(file){
     var html =
       '<h3>Importar backup</h3>'+
       '<p style="color:var(--ink-soft);font-size:13.5px;">Este arquivo tem <b>'+parsed.materials.length+'</b> material(is), '+
-      '<b>'+parsed.movements.length+'</b> movimentação(ões), <b>'+parsed.warehouses.length+'</b> depósito(s) e '+
+      '<b>'+parsed.movements.length+'</b> movimentação(ões), <b>'+parsed.warehouses.length+'</b> almoxarifado(s) e '+
       '<b>'+parsed.users.length+'</b> usuário(s).<br><br>Importar vai <b>substituir todos os dados atuais do servidor</b>, para todos os dispositivos conectados na rede. Essa ação não pode ser desfeita.</p>'+
       '<div id="impFormError" class="form-error" hidden></div>'+
       '<div class="modal-actions">'+
@@ -1170,8 +1346,7 @@ async function doLogin(e){
   var pass = qs('loginPass').value;
   var btn = qs('loginBtn');
   btn.disabled = true; btn.textContent = 'Entrando…';
-  var hash = await sha256(pass);
-  var resp = await apiPost('/api/login', {username: uname, passwordHash: hash});
+  var resp = await apiPost('/api/login', {username: uname, password: pass});
   if(!resp.ok){
     showLoginError(resp.error || 'Usuário ou senha inválidos.');
     btn.disabled=false; btn.textContent='Entrar';
@@ -1179,13 +1354,24 @@ async function doLogin(e){
   }
   currentUser = resp.user;
   btn.disabled=false; btn.textContent='Entrar';
+  // O login gravou um cookie de sessão no navegador; a conexão em tempo real que já estava
+  // aberta (sem login) não usa esse cookie retroativamente, então reabrimos pra virar uma
+  // conexão autenticada e passar a receber os dados de verdade.
+  connectRealtime();
   enterApp();
 }
-function doLogout(){
+function doLogout(msg){
+  var wasLoggedIn = !!currentUser;
   currentUser = null;
+  activeWarehouseId = null;
   qs('appScreen').hidden = true;
   qs('loginScreen').hidden = false;
   qs('loginPass').value = '';
+  if(typeof msg === 'string' && msg){ showLoginError(msg); } else { qs('loginError').hidden = true; }
+  if(wasLoggedIn){
+    apiPost('/api/logout', {}).catch(function(){});
+    connectRealtime();
+  }
 }
 function enterApp(){
   qs('loginScreen').hidden = true;
@@ -1193,17 +1379,36 @@ function enterApp(){
   qs('whoName').textContent = currentUser.username;
   qs('whoRole').textContent = currentUser.role;
   qs('whoAvatar').textContent = currentUser.username.slice(0,2).toUpperCase();
-  qs('navUsersItem').hidden = currentUser.role !== 'admin';
-  qs('navBackupItem').hidden = currentUser.role !== 'admin';
+  qs('navUsersItem').hidden = !isAdmin();
+  qs('navWarehousesItem').hidden = !isAdmin();
+  qs('navBackupItem').hidden = false; // todo mundo pode acessar Backup agora (operador só exporta)
+  activeWarehouseId = isAdmin() ? (activeWarehouseId || ALL_WAREHOUSES) : currentUser.warehouseId;
   renderAll();
   setPage('dashboard');
 }
 
 /* ================= init ================= */
+/* Se o navegador ainda tem um cookie de sessão válido (login de até 30 dias atrás), entra direto
+   no app sem pedir login de novo — útil principalmente quando o sistema está hospedado na
+   internet, onde a aba recarrega com mais frequência (celular, Wi‑Fi instável) do que na rede
+   local. Se não tiver sessão válida (ou o servidor tiver reiniciado, o que apaga as sessões da
+   memória), cai na tela de login normalmente. */
+async function tryRestoreSession(){
+  try{
+    var res = await fetch('/api/session', {method:'GET'});
+    var data = await res.json();
+    if(data && data.ok && data.user){
+      currentUser = data.user;
+      connectRealtime();
+      enterApp();
+    }
+  }catch(e){ /* sem sessão — segue pra tela de login */ }
+}
 function init(){
   wireStaticEvents();
   qs('loginForm').addEventListener('submit', doLogin);
   connectRealtime();
+  tryRestoreSession();
 }
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', init); } else { init(); }
 
