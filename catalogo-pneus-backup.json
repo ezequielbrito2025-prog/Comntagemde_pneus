@@ -1,0 +1,333 @@
+{
+  "warehouses": [
+    {
+      "id": "30tqj3gfof80",
+      "name": "Depósito",
+      "createdAt": "2026-09-16T16:35:25.722Z"
+    }
+  ],
+  "materials": [
+    {
+      "id": "mcd0ytkrs8q8",
+      "code": "OS0027V",
+      "name": "PNEU CONSERTO 275/80",
+      "category": "Pneu conserto",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "0jszt83jg7ld",
+      "code": "OT0040R33",
+      "name": "PNEU CONSERTO 235/75",
+      "category": "Pneu conserto",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "lo75z9vkjbfi",
+      "code": "OT0040C33",
+      "name": "PNEU CONSERTO 225/75",
+      "category": "Pneu conserto",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "ga5icmrc1imr",
+      "code": "OT0040633",
+      "name": "PNEU CONSERTO 215/75",
+      "category": "Pneu conserto",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "btgpre057b4z",
+      "code": "OT0082007AN0314",
+      "name": "PNEU CONSERTO 7.5/16",
+      "category": "Pneu conserto",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "8jjjat6gqvpn",
+      "code": "OT0042721",
+      "name": "PNEU RECAPADO 275/80",
+      "category": "Pneu recapado",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "jsuy8vhsead5",
+      "code": "OT0042R31",
+      "name": "PNEU RECAPADO 235/75",
+      "category": "Pneu recapado",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "msk3emc0hhva",
+      "code": "OT0040C30",
+      "name": "PNEU RECAPADO 225/75",
+      "category": "Pneu recapado",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "2nv55g9i9pqb",
+      "code": "OT0040630",
+      "name": "PNEU RECAPADO 215/75",
+      "category": "Pneu recapado",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "5etnd1zk55v6",
+      "code": "OT0080035F53515",
+      "name": "PNEU RECAPADO 7.5/16",
+      "category": "Pneu recapado",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "nbfgcfa5i7eu",
+      "code": "OT0042A30",
+      "name": "PNEU RECAPADO 295/80",
+      "category": "Pneu recapado",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "hp03ornuluju",
+      "code": "OT0040S30",
+      "name": "PNEU RECAPADO 11R",
+      "category": "Pneu recapado",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "y210angvfwvy",
+      "code": "OT0080044040122",
+      "name": "PNEU NOVO 235/75 G686 GOODYEAR",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "fmkjnpyil8xj",
+      "code": "OT0082011700403",
+      "name": "PNEU NOVO 175/70 R14 F580 FIRESTONE",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "41dhmkh0odrb",
+      "code": "OT0082017C70103",
+      "name": "PNEU NOVO 215/75 ARMOR MAX GOODYEAR",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "ebb7qax81sy0",
+      "code": "OT0082021920103",
+      "name": "PNEU NOVO 225/75 G32 GOODYEAR",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "cpqvhvngd9y0",
+      "code": "OT0082025D00335",
+      "name": "PNEU NOVO 275/80 FG88 PIRELLI",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "42l5wz59pqrw",
+      "code": "OT0082025E70103",
+      "name": "PNEU NOVO 275/80 ARMOR MAX GOODYEAR",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "yfn72tkmcwre",
+      "code": "OT0082025IC0465",
+      "name": "PNEU NOVO 275/80 T819 FIRESTONE",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "k3texlwrb7ow",
+      "code": "OT0082033140303",
+      "name": "PNEU NOVO 215/75 FG85 PIRELLI",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "3uouj2zhqpaz",
+      "code": "OT0082069790303",
+      "name": "PNEU NOVO MOTO 90/90 PIRELLI",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "gddw5zjlsshz",
+      "code": "OT0082082790303",
+      "name": "PNEU NOVO MOTO 2,75X18 PIRELLI",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "12dgnzmh9fwa",
+      "code": "OT0082102D40303",
+      "name": "PNEU NOVO 165/70 F.ENERGY PIRELLI",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "17lfdn512uqv",
+      "code": "OT0082156BB0151",
+      "name": "PNEU NOVO 185/55 E.GRIP GOODYEAR",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "cjb1xnghn42j",
+      "code": "OT008A025HG1055",
+      "name": "PNEU NOVO 275/80 R165E BRIDGESTONE",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    },
+    {
+      "id": "bk6pgp6y58dk",
+      "code": "OT008A025HT0456",
+      "name": "PNEU NOVO 275/80 T822 FIRESTONE",
+      "category": "Pneu novo",
+      "warehouseId": "30tqj3gfof80",
+      "warehouseName": "Depósito",
+      "quantity": 0,
+      "unit": "UND",
+      "createdAt": "2026-09-16T16:35:25.722Z",
+      "updatedAt": "2026-09-16T16:35:25.722Z"
+    }
+  ],
+  "movements": [],
+  "users": [
+    {
+      "username": "admin",
+      "passwordHash": "sha256_240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "role": "admin",
+      "createdAt": "2026-09-16T16:35:25.722Z"
+    }
+  ],
+  "dailyCounts": {}
+}

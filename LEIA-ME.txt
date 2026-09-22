@@ -1,0 +1,59 @@
+CONTROLE DE PNEUS — versão modular (código de aplicação)
+==========================================================
+
+O QUE TEM NESTE PACOTE
+-----------------------
+- index.html                 -> estrutura HTML da página (referencia style.css e app.js).
+- style.css                  -> todo o CSS (design tokens, tema claro/escuro, layout responsivo).
+- app.js                     -> toda a lógica JavaScript (dados, telas, validações, backup).
+- catalogo-pneus-backup.json -> backup pronto com os 26 códigos reais da sua planilha de pneus,
+                                 para importar dentro do app (ver "Backup" no app).
+
+Esta é a MESMA aplicação do arquivo único "estoque-pneus.html", só que separada em três arquivos
+(HTML / CSS / JS), útil se você (ou outro dev) for abrir o projeto num editor de código, usar
+controle de versão (git), ou integrar num pipeline de build no futuro.
+
+COMO EXECUTAR
+--------------
+1. Mantenha os três arquivos (index.html, style.css, app.js) na MESMA PASTA — o index.html carrega
+   os outros dois por caminho relativo.
+2. Dê duplo clique em "index.html". Ele abre no navegador padrão. Não precisa de servidor.
+3. Login de primeiro acesso: usuário "admin", senha "admin123".
+4. No celular: NÃO abra pelo preview rápido de apps de mensagem/arquivos (bloqueiam JavaScript).
+   Use "Abrir com" -> navegador, ou copie a pasta inteira para o app Arquivos e abra por lá.
+
+ESTRUTURA DO CÓDIGO (app.js)
+------------------------------
+- Camada de dados: STORE_KEY, loadOrSeedStore(), persistStore(), buildSeedStore(), migrateStore()
+  — tudo o que entra/sai do localStorage do navegador (migrateStore() normaliza dados salvos por
+  uma versão anterior do app, que tinha 3 depósitos e estoque mínimo).
+- Autenticação: sha256() (hash de senha), doLogin(), doLogout(), enterApp().
+- Telas (render*): renderDashboardPanels (com o gráfico de barras por categoria), renderMaterials,
+  renderMovementsToday, renderHistory, renderCount (contagem diária), renderWarehouses, renderUsers.
+- Modais: openMaterialModal, openWarehouseModal, openUserModal, openMovementModal (Entrada/
+  Saída/Ajuste).
+- Contagem diária: renderCount(), exportDailyCountExcel() — gera um .xlsx real na hora, sem
+  precisar de internet nem de biblioteca externa (buildXlsx()/makeZip() no próprio app.js).
+- Backup: exportBackup(), importBackupFile().
+
+COMO OS DADOS SÃO SALVOS
+--------------------------
+Tudo fica no localStorage do NAVEGADOR onde o arquivo é aberto — não há servidor, nada é enviado
+para a internet. Cada computador/navegador tem seu próprio estoque. Para levar os dados de um
+computador para outro, use "Backup -> Exportar backup" (gera .json) e depois "Backup -> Importar
+backup" no outro computador.
+
+FUNCIONALIDADES
+-----------------
+- Painel com gráfico de barras das unidades em estoque por categoria (pneu novo, conserto,
+  recapado) e resumo das últimas movimentações.
+- Cadastro de materiais (nome, código, categoria, depósito, quantidade, unidade).
+- Registro de Entrada / Saída / Ajuste, com data, ativo e responsável.
+- Contagem diária: tela para digitar a quantidade contada fisicamente de cada pneu no dia,
+  comparando com a quantidade do sistema (diferença calculada na hora), com exportação para
+  Excel (.xlsx) para conferência ou arquivo.
+- Um único local de estoque ("Depósito") por padrão — a tela de Depósitos continua disponível
+  caso queira renomear ou cadastrar outros locais.
+- Histórico completo de movimentações, com filtros.
+- Gestão de usuários (login com usuário/senha).
+- Exportar/Importar backup em .json.
