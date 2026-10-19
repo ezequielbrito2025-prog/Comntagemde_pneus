@@ -31,9 +31,14 @@ ETAPA 1 — CRIAR O BANCO DE DADOS NO SUPABASE
 4. Escolha a região mais próxima do Brasil (ex.: "South America (São
    Paulo)", se aparecer na lista) e clique em criar. Leva 1-2 minutos para
    o banco ficar pronto.
-5. Depois que o projeto abrir, vá em: menu "Settings" (⚙️, geralmente no
-   canto inferior esquerdo) > "Database".
-6. Procure a seção "Connection string" (string de conexão) e escolha o
+5. Depois que o projeto abrir, procure no TOPO da página (ao lado do nome
+   do projeto/"main PRODUCTION") um botão VERDE escrito "Connect". Clique
+   nele.
+   (Em versões mais antigas do Supabase esse mesmo texto ficava em
+   "Settings" > "Database" > "Connection string" — se o botão "Connect"
+   não aparecer para você, procure por lá.)
+6. Vai abrir uma janela com a string de conexão para vários tipos de
+   ferramenta. Procure a seção "Connection string" (ou "ORMs") e escolha o
    formato "URI". Vai aparecer algo parecido com isto:
 
    postgresql://postgres.xxxxxxxxxxxx:[YOUR-PASSWORD]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
@@ -43,10 +48,15 @@ ETAPA 1 — CRIAR O BANCO DE DADOS NO SUPABASE
    de verdade no lugar) é o seu DATABASE_URL — guarde essa linha completa,
    você vai colar ela no Render na Etapa 3.
 
-   Dica: se a página do Supabase oferecer duas opções de conexão ("Session
+   Dica: se a janela oferecer mais de uma opção de conexão ("Session
    pooler" / "Transaction pooler" / conexão direta), qualquer uma funciona
    para este sistema. Se não tiver certeza, use a que a própria página
    mostrar primeiro/como padrão.
+
+   Esqueceu a senha? Dentro dessa mesma área (Settings > Database, ou o
+   próprio botão "Connect") tem uma opção para gerar uma senha nova do
+   banco — só lembre de atualizar o DATABASE_URL no Render depois, se isso
+   acontecer depois da Etapa 3.
 
 
 ETAPA 2 — COLOCAR OS ARQUIVOS DO SISTEMA NO GITHUB

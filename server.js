@@ -558,6 +558,67 @@ function handleApi(req, res, pathname, body, session) {
       return sendJson(res, 200, { ok: true });
     }
 
+    /* Transferência entre almoxarifados: tira a quantidade do material de origem e soma num
+       material equivalente (mesmo código) no almoxarifado de destino — criando esse material lá
+       se ainda não existir. Fica numa rota própria (em vez de reaproveitar /api/movements) porque
+       mexe em DOIS materiais de uma vez só; um único lançamento no histórico (type:'transferencia')
+       representa as duas pontas, em vez de duas linhas separadas de saída/entrada. */
+    if (pathname === '/api/transfers' && req.method === 'POST') {
+      var tMat = materialById(body.materialId);
+      var tDestWhId = body.destWarehouseId;
+      var tQty = Number(body.quantity);
+      var tDate = body.date;
+      var tPerson = (body.person || '').trim();
+      if (!tMat || !tDestWhId || isNaN(tQty) || tQty <= 0 || !tDate || !tPerson) {
+        return sendJson(res, 200, { ok: false, error: 'Preencha os campos obrigatórios.' });
+      }
+      var tDestWh = store.warehouses.find(function (w) { return w.id === tDestWhId; });
+      if (!tDestWh) return sendJson(res, 200, { ok: false, error: 'Almoxarifado de destino inválido.' });
+      if (tDestWhId === tMat.warehouseId) {
+        return sendJson(res, 200, { ok: false, error: 'O almoxarifado de destino precisa ser diferente do de origem.' });
+      }
+      // Operador só pode transferir a PARTIR do próprio almoxarifado (mas pode escolher qualquer
+      // destino — faz sentido mandar pneu pra outro armazém mesmo sem acesso a ele).
+      if (!isSessionAdmin && tMat.warehouseId !== session.warehouseId) {
+        return sendJson(res, 403, { ok: false, error: 'Você só pode transferir materiais do seu próprio almoxarifado.' });
+      }
+      var tPrevQty = Number(tMat.quantity || 0);
+      if (tQty > tPrevQty) {
+        return sendJson(res, 200, { ok: false, error: 'Quantidade indisponível. Em estoque: ' + tPrevQty + ' ' + tMat.unit + '.' });
+      }
+      var tNow = nowIso();
+      var tOriginWhId = tMat.warehouseId;
+      var tOriginWhName = warehouseName(tOriginWhId);
+      // Acha (ou cria) o material equivalente no destino, casando pelo código — do mesmo jeito
+      // que a checagem de duplicado usada ao cadastrar materiais.
+      var tDestMat = store.materials.find(function (m) {
+        return m.warehouseId === tDestWhId && m.code.toLowerCase() === tMat.code.toLowerCase();
+      });
+      if (tDestMat) {
+        tDestMat.quantity = Number(tDestMat.quantity || 0) + tQty;
+        tDestMat.updatedAt = tNow;
+      } else {
+        tDestMat = {
+          id: uid(), name: tMat.name, code: tMat.code, category: tMat.category, warehouseId: tDestWhId,
+          warehouseName: tDestWh.name, unit: tMat.unit, quantity: tQty, createdAt: tNow, updatedAt: tNow
+        };
+        store.materials.push(tDestMat);
+      }
+      tMat.quantity = tPrevQty - tQty;
+      tMat.updatedAt = tNow;
+      store.movements.unshift({
+        id: uid(), materialId: tMat.id, materialCode: tMat.code, materialName: tMat.name, type: 'transferencia',
+        quantity: tQty, previousQty: tPrevQty, newQty: tMat.quantity, date: tDate, asset: '',
+        supplierId: '', supplierName: '', person: tPerson,
+        warehouseId: tOriginWhId, warehouseName: tOriginWhName,
+        originWarehouseId: tOriginWhId, originWarehouseName: tOriginWhName,
+        destWarehouseId: tDestWhId, destWarehouseName: tDestWh.name, destMaterialId: tDestMat.id,
+        note: (body.note || '').trim(), createdAt: tNow, createdBy: session.username
+      });
+      saveAndBroadcast();
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (pathname === '/api/users' && req.method === 'POST') {
       if (!isSessionAdmin) return sendJson(res, 403, { ok: false, error: 'Só o administrador pode gerenciar usuários.' });
       var uUser = (body.username || '').trim().toLowerCase();

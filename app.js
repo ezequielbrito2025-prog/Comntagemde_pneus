@@ -1010,6 +1010,96 @@ function openMovementModal(type){
   });
 }
 
+/* ================= transfer modal =================
+   Diferente de Entrada/Saída/Ajuste, transferência SEMPRE precisa de conexão com o servidor (não
+   entra na fila offline): ela mexe em dois materiais — às vezes em dois almoxarifados diferentes
+   — e pode até criar um material novo no destino, o que é arriscado demais pra "simular" offline
+   e corrigir depois. Por isso usa apiPost() simples (igual cadastro de almoxarifado/fornecedor),
+   que já avisa claramente quando não consegue falar com o servidor. */
+function openTransferModal(){
+  var needsWhPicker = isAdmin() && activeWarehouseId === ALL_WAREHOUSES;
+  var lockedWhId = needsWhPicker ? null : (isAdmin() ? activeWarehouseId : (currentUser && currentUser.warehouseId));
+  var emptyCheck = needsWhPicker ? materials : materialsInScope();
+  if(emptyCheck.length===0){ toast('Cadastre um material antes de registrar transferência.'); return; }
+  if(warehouses.length<2){ toast('Cadastre pelo menos dois almoxarifados antes de transferir entre eles.'); return; }
+  var firstWhId = needsWhPicker ? visibleWarehouses()[0].id : lockedWhId;
+
+  function destOptions(originWhId, selectedId){
+    return warehouses.filter(function(w){ return w.id !== originWhId; }).map(function(w){
+      return '<option value="'+w.id+'" '+(w.id===selectedId?'selected':'')+'>'+esc(w.name)+'</option>';
+    }).join('');
+  }
+
+  var html =
+    '<h3>Transferência entre almoxarifados</h3>'+
+    '<div id="trfFormError" class="form-error" hidden></div>'+
+    '<form id="trfForm">'+
+      (needsWhPicker ?
+        '<div class="field"><label>Almoxarifado de origem</label><select id="trfWh" required>'+whOptions(firstWhId)+'</select></div>'
+        :
+        '<div class="field"><label>Almoxarifado de origem</label><select id="trfWh" disabled></select><div class="helptext">Determinado automaticamente (o do seu almoxarifado).</div></div>'
+      )+
+      '<div class="field"><label>Material</label><select id="trfMaterial" required></select></div>'+
+      '<div class="field"><label>Almoxarifado de destino</label><select id="trfDestWh" required></select>'+
+        '<div class="helptext">Se o material ainda não existir nesse almoxarifado, ele é cadastrado lá automaticamente.</div></div>'+
+      '<div class="grid2">'+
+        '<div class="field"><label>Quantidade</label><input id="trfQty" type="number" min="1" step="1" required></div>'+
+        '<div class="field"><label>Data</label><input id="trfDate" type="date" value="'+todayStr()+'" required></div>'+
+      '</div>'+
+      '<div class="field"><label>Responsável pela transferência</label><input id="trfPerson" required placeholder="Nome"></div>'+
+      '<div class="field"><label>Observação <span style="font-weight:400;color:var(--ink-faint);">(opcional)</span></label><input id="trfNote" placeholder="ex: reequilíbrio de estoque"></div>'+
+      '<div class="modal-actions">'+
+        '<button type="button" class="btn btn-secondary" id="trfCancel">Cancelar</button>'+
+        '<button type="submit" class="btn btn-primary">Transferir</button>'+
+      '</div>'+
+    '</form>';
+  openModal(html, function(root){
+    var matSel = root.querySelector('#trfMaterial');
+    var whSel = root.querySelector('#trfWh');
+    var destSel = root.querySelector('#trfDestWh');
+    function renderMatOptions(whId){
+      var list = needsWhPicker ? materials.filter(function(m){ return m.warehouseId === whId; }) : materialsInScope();
+      matSel.innerHTML = list.map(function(m){return '<option value="'+m.id+'">'+esc(m.code)+' — '+esc(m.name)+' ('+m.quantity+' '+esc(m.unit)+')</option>';}).join('');
+    }
+    function renderDestOptions(originWhId){
+      destSel.innerHTML = destOptions(originWhId);
+    }
+    if(needsWhPicker){
+      renderMatOptions(whSel.value);
+      renderDestOptions(whSel.value);
+      whSel.addEventListener('change', function(){ renderMatOptions(whSel.value); renderDestOptions(whSel.value); });
+    } else {
+      whSel.innerHTML = whOptions(lockedWhId);
+      renderMatOptions(lockedWhId);
+      renderDestOptions(lockedWhId);
+    }
+    root.querySelector('#trfCancel').addEventListener('click', closeModal);
+    root.querySelector('#trfForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      var errEl = root.querySelector('#trfFormError'); errEl.hidden=true;
+      var m = materialById(matSel.value);
+      var destWhId = destSel.value;
+      var qtyInput = Number(root.querySelector('#trfQty').value);
+      var date = root.querySelector('#trfDate').value;
+      var person = root.querySelector('#trfPerson').value.trim();
+      var note = root.querySelector('#trfNote').value.trim();
+      if(!m || !destWhId || isNaN(qtyInput) || qtyInput<=0 || !date || !person){ errEl.textContent='Preencha os campos obrigatórios.'; errEl.hidden=false; return; }
+      if(qtyInput > Number(m.quantity||0)){
+        errEl.textContent = 'Quantidade indisponível. Em estoque: '+m.quantity+' '+m.unit+'.'; errEl.hidden=false; return;
+      }
+      var btn = root.querySelector('button[type="submit"]'); btn.disabled = true;
+      var resp = await apiPost('/api/transfers', {
+        materialId:m.id, destWarehouseId:destWhId, quantity:qtyInput, date:date, person:person, note:note
+      });
+      btn.disabled = false;
+      if(!resp.ok){ errEl.textContent = resp.error || 'Não foi possível registrar a transferência.'; errEl.hidden=false; return; }
+      toast('Transferência registrada.');
+      closeModal();
+      setPage('movements');
+    });
+  });
+}
+
 /* ================= users modal ================= */
 function openUserModal(){
   var html =
@@ -1353,6 +1443,7 @@ function wireStaticEvents(){
   qs('btnEntrada').addEventListener('click', function(){ openMovementModal('entrada'); });
   qs('btnSaida').addEventListener('click', function(){ openMovementModal('saida'); });
   qs('btnAjuste').addEventListener('click', function(){ openMovementModal('ajuste'); });
+  qs('btnTransferencia').addEventListener('click', function(){ openTransferModal(); });
 
   qs('dismissSeedBanner').addEventListener('click', function(){
     seedBannerDismissed = true;
