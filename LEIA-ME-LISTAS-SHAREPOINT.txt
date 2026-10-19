@@ -1,0 +1,121 @@
+==========================================================
+ CONTROLE DE PNEUS 100% NO SHAREPOINT - ETAPA 1: AS LISTAS
+==========================================================
+
+Isso aqui e a "base de dados" do sistema novo, usando so Listas do
+SharePoint (sem precisar de nenhum administrador de TI). Depois que as
+6 listas abaixo estiverem criadas, a gente parte para a Etapa 2 (o
+Power App com as telas).
+
+COMO CRIAR CADA LISTA (faca isso 6 vezes, uma para cada lista abaixo)
+------------------------------------------------------------------------
+1. No site do SharePoint, clique em "Conteudo do site" no menu esquerdo.
+2. Clique em "+ Novo" > "Lista".
+3. Escolha "Lista em branco".
+4. Digite o nome EXATO da lista (ver abaixo) e clique em "Criar".
+5. Dentro da lista, adicione as colunas clicando no "+" que fica no
+   final da linha de cabecalho (ou em "+ Adicionar coluna").
+6. Para cada coluna, escolha o TIPO indicado, digite o NOME exato, e
+   clique em "Salvar".
+7. Toda lista do SharePoint ja vem com uma coluna chamada "Titulo"
+   (Title) de fabrica - use ela para o que esta indicado em cada lista,
+   nao precisa criar de novo.
+
+IMPORTANTE: use os nomes exatamente como estao escritos aqui (sem
+acento, do jeito que aparece), porque o Power App vai procurar as
+listas e colunas por esse nome depois.
+
+
+LISTA 1: "Almoxarifados"
+------------------------
+| Coluna   | Tipo                  | Observacao                    |
+|----------|-----------------------|--------------------------------|
+| Titulo   | (ja existe de fabrica)| Nome do almoxarifado          |
+
+Depois de criada, adicione uma linha para cada almoxarifado que voces
+tem hoje (ex: "Almoxarifado Dois Irmaos", "Almoxarifado Muribeca").
+
+
+LISTA 2: "Materiais"
+---------------------
+| Coluna    | Tipo                   | Observacao                          |
+|-----------|------------------------|--------------------------------------|
+| Titulo    | (ja existe de fabrica) | Descricao do material (ex: "PNEU NOVO 175/70 R14 FIRESTONE") |
+| Categoria | Escolha                | Opcoes: Novo / Conserto / Recapado  |
+| Codigo    | Uma linha de texto     | Opcional, se voces usam codigo interno |
+
+Cadastre aqui, linha por linha, cada tipo de pneu que voces controlam
+hoje (os mesmos que aparecem na tela "Estoque" do sistema atual).
+
+
+LISTA 3: "Estoque"
+-------------------
+Essa lista guarda a quantidade ATUAL de cada material em cada
+almoxarifado (e atualizada automaticamente pelo Power App sempre que
+alguem registra uma entrada, saida ou ajuste).
+
+| Coluna        | Tipo                   | Observacao                        |
+|---------------|------------------------|-------------------------------------|
+| Titulo        | (ja existe de fabrica) | Pode deixar em branco/auto         |
+| Material      | Pesquisa               | Aponte para a lista "Materiais", coluna "Titulo" |
+| Almoxarifado  | Pesquisa               | Aponte para a lista "Almoxarifados", coluna "Titulo" |
+| Quantidade    | Numero                 | Numero inteiro, valor padrao 0     |
+
+Nao precisa preencher essa lista na mao - o Power App vai criar e
+atualizar as linhas dela sozinho conforme o uso.
+
+
+LISTA 4: "Movimentacoes"
+--------------------------
+O historico de entradas, saidas e ajustes (equivalente a tela
+"Movimentacao" e "Historico" do sistema atual).
+
+| Coluna        | Tipo                   | Observacao                          |
+|---------------|------------------------|---------------------------------------|
+| Titulo        | (ja existe de fabrica) | Pode deixar em branco/auto           |
+| Data          | Data e Hora            |                                       |
+| Tipo          | Escolha                | Opcoes: Entrada / Saida / Ajuste     |
+| Material      | Pesquisa               | Aponte para "Materiais", coluna "Titulo" |
+| Almoxarifado  | Pesquisa               | Aponte para "Almoxarifados", coluna "Titulo" |
+| Quantidade    | Numero                 |                                       |
+| Responsavel   | Uma linha de texto     | Preenchido automaticamente pelo app  |
+| Observacao    | Varias linhas de texto | Opcional                             |
+
+
+LISTA 5: "ContagemDiaria"
+---------------------------
+A conferencia diaria (equivalente a tela "Contagem diaria" de hoje).
+
+| Coluna            | Tipo                   | Observacao                        |
+|-------------------|------------------------|-------------------------------------|
+| Titulo            | (ja existe de fabrica) | Pode deixar em branco/auto         |
+| Data              | Data e Hora            |                                     |
+| Material          | Pesquisa               | Aponte para "Materiais", coluna "Titulo" |
+| Almoxarifado      | Pesquisa               | Aponte para "Almoxarifados", coluna "Titulo" |
+| QuantidadeContada | Numero                 |                                     |
+| Responsavel       | Uma linha de texto     | Preenchido automaticamente pelo app|
+
+
+LISTA 6: "Usuarios"
+---------------------
+Essa lista substitui o "login proprio" de hoje: em vez de usuario e
+senha, cada pessoa entra com a propria conta Microsoft 365, e essa
+lista diz se ela e admin ou operador, e de qual almoxarifado.
+
+| Coluna        | Tipo                   | Observacao                            |
+|---------------|------------------------|------------------------------------------|
+| Titulo        | (ja existe de fabrica) | Nome da pessoa (ex: "Cledisson")        |
+| Email         | Uma linha de texto     | O e-mail Microsoft 365 da pessoa (ex: cledisson@consorciorecifeambiental.com.br) - TEM que ser identico ao email de login |
+| Papel         | Escolha                | Opcoes: Admin / Operador                |
+| Almoxarifado  | Pesquisa               | Aponte para "Almoxarifados", coluna "Titulo" - so importa para quem e Operador |
+
+Cadastre aqui cada pessoa que vai usar o sistema (incluindo voce, como
+Admin).
+
+
+DEPOIS DE CRIAR AS 6 LISTAS
+------------------------------
+Me avise que elas estao prontas (pode mandar um print de cada uma, se
+quiser que eu confira) que a gente parte para a Etapa 2: montar as
+telas no Power Apps, passo a passo, do mesmo jeito que fizemos com o
+SharePoint.

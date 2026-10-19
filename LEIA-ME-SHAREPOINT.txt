@@ -1,0 +1,146 @@
+========================================================
+ CONTROLE DE PNEUS DENTRO DO SHAREPOINT - COMO INSTALAR
+========================================================
+
+O QUE FOI FEITO
+----------------
+Como voce pediu, o sistema Controle de Pneus continua exatamente como
+esta hoje:
+
+  - O login continua sendo usuario e senha, do jeito que ja e (nao foi
+    trocado para conta do Microsoft 365).
+  - Os dados continuam sendo guardados do mesmo jeito de sempre (nenhuma
+    Lista do SharePoint foi criada).
+  - O sistema continua rodando no mesmo endereco de sempre:
+    https://contagempneus-production.up.railway.app
+
+O que foi criado foi uma "janela" (um web part oficial do SharePoint)
+que mostra o sistema inteiro dentro de uma pagina do SharePoint, como se
+fosse mais um aplicativo do site. Isso e chamado tecnicamente de "SPFx
+web part com iframe".
+
+Voce recebeu um arquivo chamado:
+
+  controle-pneus-embed.sppkg
+
+Esse e o "instalador" do web part. So precisa ser enviado 1 vez para o
+SharePoint da empresa (por alguem com permissao de administrador). Depois
+disso, qualquer pessoa que edita paginas do SharePoint pode colocar o
+Controle de Pneus em qualquer pagina, quantas vezes quiser, sem precisar
+mexer em nada tecnico de novo.
+
+
+AVISO IMPORTANTE ANTES DE COMECAR
+----------------------------------
+Para instalar o arquivo .sppkg, alguem da empresa precisa ter acesso de
+ADMINISTRADOR do SharePoint/Microsoft 365 (o "Catalogo de Aplicativos" /
+"App Catalog"). Se ninguem na empresa tem esse acesso, pule direto para
+a OPCAO B mais abaixo, que nao exige nenhuma permissao especial.
+
+
+===========================================================
+ OPCAO A - INSTALAR O APLICATIVO OFICIAL (visual mais bonito)
+===========================================================
+
+Feito uma vez, por um administrador do SharePoint:
+
+PASSO 1 - Enviar o arquivo para o Catalogo de Aplicativos
+  1. Acesse o SharePoint admin center (admin.microsoft.com > SharePoint,
+     ou o link direto https://<suaempresa>-admin.sharepoint.com).
+  2. No menu esquerdo, clique em "Mais recursos" e depois em "Abrir" na
+     caixa "Catalogo de aplicativos" (App Catalog). Se ainda nao existir
+     um catalogo de aplicativos, o proprio SharePoint oferece o botao
+     "Criar catalogo de aplicativos" - pode aceitar as opcoes padrao.
+  3. Dentro do catalogo de aplicativos, va em "Apps para SharePoint" e
+     clique em "Carregar" (Upload).
+  4. Selecione o arquivo controle-pneus-embed.sppkg
+  5. Quando aparecer a pergunta se confia no aplicativo, clique em
+     "Implantar" (Deploy) / "Confiar nele" (Trust it).
+
+Pronto - a partir de agora o web part "Controle de Pneus" fica
+disponivel para ser adicionado em qualquer pagina do SharePoint da
+empresa.
+
+PASSO 2 - Adicionar o web part numa pagina
+  1. Abra (ou crie) a pagina do SharePoint onde o sistema deve aparecer.
+  2. Clique em "Editar" no canto superior direito.
+  3. Clique no simbolo "+" para adicionar um novo web part.
+  4. Procure por "Controle de Pneus" e clique para adicionar.
+  5. O sistema ja aparece funcionando, com o endereco certo preenchido
+     automaticamente.
+  6. Clique em "Republicar"/"Publicar" para salvar a pagina.
+
+PASSO 3 - Ajustar o tamanho (opcional)
+  1. Com a pagina em modo de edicao, clique em cima do web part.
+  2. Vai aparecer um lapis/icone de configuracao na lateral - clique nele.
+  3. Ali da para mudar:
+     - "Link do sistema (URL)" - normalmente nao precisa mexer.
+     - "Altura da tela (em pixels)" - aumente se quiser uma janela maior
+       (por exemplo 1100 em vez de 900).
+     - "Mostrar um titulo acima do sistema" - liga/desliga um titulo.
+
+
+===========================================================
+ OPCAO B - SEM INSTALAR NADA (mais simples, sem TI)
+===========================================================
+
+Se ninguem tem acesso de administrador para instalar o .sppkg, da para
+colocar o sistema dentro do SharePoint de um jeito mais simples, usando
+um recurso que o proprio SharePoint ja tem pronto, sem precisar instalar
+nada:
+
+  1. Abra a pagina do SharePoint onde o sistema deve aparecer.
+  2. Clique em "Editar".
+  3. Clique no "+" para adicionar um web part.
+  4. Procure pelo web part chamado "Incorporar" (em ingles "Embed").
+  5. Cole o endereco: https://contagempneus-production.up.railway.app
+  6. Clique em "Republicar"/"Publicar".
+
+Essa opcao funciona na hora, sem esperar ninguem instalar nada - so nao
+fica com as opcoes extras de ajustar altura/titulo que a Opcao A tem.
+
+
+O QUE NAO MUDA EM NENHUMA DAS DUAS OPCOES
+-------------------------------------------
+  - O login continua sendo usuario/senha, exatamente como e hoje.
+  - Os dados continuam guardados do mesmo jeito de sempre.
+  - O link direto https://contagempneus-production.up.railway.app
+    continua funcionando normalmente por fora do SharePoint tambem.
+
+
+UM PONTO DE ATENCAO HONESTO
+------------------------------
+Como o sistema continua morando fora do SharePoint (no Railway) e
+aparece "dentro de uma janela" (iframe), alguns navegadores com
+configuracoes de privacidade bem restritas (principalmente o Safari, da
+Apple) podem, em alguns casos, esquecer o login mais rapido quando o
+sistema e acessado de DENTRO do SharePoint, e pedir para entrar de novo
+com mais frequencia do que quando se acessa o link direto. No Chrome e
+no Edge, com as configuracoes padrao de fabrica, isso normalmente nao
+acontece. Se algum funcionario reclamar que "fica pedindo login toda
+hora" dentro do SharePoint, e ese for exatamente esse caso, e so usar o
+link direto (https://contagempneus-production.up.railway.app) em vez da
+versao dentro do SharePoint para esse caso especifico - me avise que a
+gente ve outra solucao.
+
+
+DUVIDAS FREQUENTES
+--------------------
+"Precisa reinstalar o .sppkg toda vez que eu atualizar o sistema no
+Railway?"
+  Nao. O web part so mostra a "janela" - quem faz o trabalho de verdade
+  continua sendo o sistema no Railway. Atualizacoes no sistema aparecem
+  automaticamente dentro do SharePoint tambem, sem precisar reinstalar
+  nada.
+
+"Posso colocar o Controle de Pneus em mais de uma pagina do
+SharePoint?"
+  Sim, quantas quiser, depois que o .sppkg for instalado uma vez (Opcao
+  A) ou repetindo o passo do web part "Incorporar" em cada pagina
+  (Opcao B).
+
+"O que e esse arquivo .sppkg exatamente?"
+  E o formato oficial de aplicativo do SharePoint (parecido com um
+  instalador .exe, so que para o SharePoint). Ele nao contem nenhum
+  dado do sistema - so contem o codigo da "janela" que mostra o
+  Controle de Pneus.

@@ -2,11 +2,14 @@
   "name": "controle-de-pneus-servidor",
   "private": true,
   "version": "1.0.0",
-  "description": "Servidor do app Controle de Pneus (sem dependencias externas) - roda tanto na rede local quanto hospedado na internet.",
+  "description": "Servidor do app Controle de Pneus - roda na rede local (sem dependencias) ou hospedado na internet (Render + Supabase, usando a dependencia 'pg' so quando DATABASE_URL existir).",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
   },
   "engines": {
     "node": ">=18"

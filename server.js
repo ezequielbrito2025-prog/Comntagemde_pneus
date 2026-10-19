@@ -26,6 +26,7 @@ const path = require('path');
 const os = require('os');
 const url = require('url');
 const crypto = require('crypto');
+const db = require('./db');
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const ROOT = __dirname;
@@ -34,7 +35,10 @@ const ROOT = __dirname;
    isso lá se anexa um "volume" (armazenamento permanente) ao serviço, e o servidor passa a
    guardar os dados nele em vez de dentro da pasta do app. RAILWAY_VOLUME_MOUNT_PATH é preenchida
    sozinha pelo Railway assim que um volume é conectado ao serviço (não precisa configurar nada a
-   mais); DATA_DIR serve pra apontar manualmente em qualquer outro provedor de hospedagem. */
+   mais); DATA_DIR serve pra apontar manualmente em qualquer outro provedor de hospedagem.
+   No Render, o disco TAMBÉM se perde a cada novo deploy — por isso, quando existe uma variável
+   DATABASE_URL (veja db.js), os dados de verdade passam a morar num banco Postgres (Supabase) e
+   este arquivo local vira só uma cópia de segurança a mais, não a única fonte dos dados. */
 const DATA_DIR = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(ROOT, 'dados');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 
@@ -127,7 +131,14 @@ function getSession(req) {
   var sess = sessions[token];
   if (!sess) return null;
   if (Date.now() - sess.createdAt > SESSION_MAX_AGE_MS) { delete sessions[token]; return null; }
-  return { token: token, username: sess.username, role: sess.role, warehouseId: sess.warehouseId };
+  /* O papel e o almoxarifado vêm sempre do cadastro de usuários ATUAL, nunca do que foi
+     guardado no momento do login. Assim, se o admin importar um backup, trocar o almoxarifado
+     de alguém ou remover um usuário, isso vale na hora pra qualquer sessão já aberta dessa
+     pessoa — sem isso, um operador que já estava logado continuava sendo autorizado (ou
+     bloqueado) com base num almoxarifado que não existe mais. */
+  var liveUser = store.users.find(function (u) { return u.username === sess.username; });
+  if (!liveUser) { delete sessions[token]; return null; }
+  return { token: token, username: liveUser.username, role: liveUser.role, warehouseId: liveUser.warehouseId || null };
 }
 function createSession(req, res, u) {
   var token = newSessionToken();
@@ -230,30 +241,69 @@ function migrate(s) {
 }
 
 function persist(s) {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  var tmp = DATA_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(s, null, 2), 'utf8');
-  fs.renameSync(tmp, DATA_FILE);
+  // Cópia local: continua acontecendo sempre, do mesmo jeito que antes. Em
+  // hospedagens com disco permanente (rede local, Railway com volume), isso
+  // é a própria fonte dos dados. Em hospedagens com disco temporário (Render
+  // sem volume), isso é só uma cópia de segurança do processo atual — some
+  // no próximo deploy, mas nesse caso o banco (abaixo) é a fonte de verdade.
+  // Fica dentro de um try/catch porque, se o disco for somente-leitura ou
+  // ficar sem espaço, isso nunca deve derrubar o servidor.
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    var tmp = DATA_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(s, null, 2), 'utf8');
+    fs.renameSync(tmp, DATA_FILE);
+  } catch (e) {
+    console.error('[local] não consegui escrever ' + DATA_FILE + ' (' + e.message + '). Seguindo sem a cópia local.');
+  }
+  // Banco de dados (Supabase, via DATABASE_URL): se estiver configurado, essa
+  // chamada "dispara e esquece" — não trava nem atrasa a resposta ao
+  // navegador. Ver db.js para detalhes de por que isso é seguro.
+  if (db.isEnabled()) db.queueSave(s);
 }
 
-function loadStore() {
+function loadStoreFromFile() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       var raw = fs.readFileSync(DATA_FILE, 'utf8');
       var parsed = JSON.parse(raw);
-      var migrated = migrate(parsed);
-      persist(migrated);
-      return migrated;
+      return migrate(parsed);
     }
   } catch (e) {
     console.error('Não consegui ler dados/store.json (' + e.message + '). Começando um catálogo novo — o arquivo antigo não foi apagado.');
   }
-  var fresh = buildSeedStore();
-  persist(fresh);
-  return fresh;
+  return buildSeedStore();
 }
 
-var store = loadStore();
+/* Carrega o estado inicial do sistema, na ordem certa:
+   1. Se existir DATABASE_URL, tenta buscar os dados no banco (Supabase) — essa é a fonte de
+      verdade quando o sistema está hospedado no Render, porque o disco local lá não é permanente.
+   2. Se o banco não responder, estiver vazio (primeira vez) ou não existir DATABASE_URL, usa o
+      arquivo local dados/store.json (ou cria um catálogo novo, se nem isso existir).
+   3. Qualquer resultado passa por persist(), que grava a cópia local E (se configurado) envia
+      pro banco — isso também cobre a primeira execução com um banco novo, "semeando" os dados
+      nele a partir do arquivo local ou do catálogo padrão. */
+function loadStore() {
+  if (db.isEnabled()) {
+    return db.init().then(function () {
+      return db.fetchStore();
+    }).then(function (fromDb) {
+      if (fromDb) return migrate(fromDb);
+      return loadStoreFromFile();
+    }).catch(function (e) {
+      console.error('[db] não consegui ler o banco de dados agora (' + e.message + '). Usando os dados do arquivo local nesta inicialização.');
+      return loadStoreFromFile();
+    }).then(function (s) {
+      persist(s);
+      return s;
+    });
+  }
+  var s = loadStoreFromFile();
+  persist(s);
+  return Promise.resolve(s);
+}
+
+var store; // preenchida só depois que loadStore() terminar (veja o final do arquivo)
 
 function warehouseName(id) { var w = store.warehouses.find(function (x) { return x.id === id; }); return w ? w.name : '—'; }
 function supplierNameById(id) { var s = store.suppliers.find(function (x) { return x.id === id; }); return s ? s.name : ''; }
@@ -354,6 +404,18 @@ function handleApi(req, res, pathname, body, session) {
     if (pathname === '/api/logout' && req.method === 'POST') {
       destroySession(req, res);
       return sendJson(res, 200, { ok: true });
+    }
+
+    if (pathname === '/api/state' && req.method === 'GET') {
+      // O mesmo estado que normalmente chega por /api/events (tempo real, streaming), mas como
+      // uma resposta HTTP comum. Algumas redes (proxy/firewall corporativo, certos antivírus com
+      // "proteção web", alguns provedores de internet móvel) bloqueiam ou travam conexões do tipo
+      // "text/event-stream" mesmo quando requisições HTTP normais funcionam sem problema — nesses
+      // casos a tela de login ficava presa para sempre em "Conectando ao servidor…", porque
+      // dependia só do SSE pra saber que o servidor respondeu. Essa rota é o plano B do cliente
+      // quando o SSE demora demais pra responder.
+      if (!session) return sendJson(res, 200, { ok: true, unauthenticated: true });
+      return sendJson(res, 200, { ok: true, store: publicStore(store) });
     }
 
     // Todas as rotas abaixo desta linha exigem login.
@@ -644,30 +706,45 @@ var server = http.createServer(function (req, res) {
   res.writeHead(405); res.end();
 });
 
-server.listen(PORT, '0.0.0.0', function () {
-  console.log('=========================================================');
-  console.log(' Controle de Pneus — servidor rodando');
-  console.log('=========================================================');
-  console.log(' Neste computador, abra no navegador:');
-  console.log('   http://localhost:' + PORT);
-  var nets = os.networkInterfaces();
-  var ips = [];
-  Object.keys(nets).forEach(function (name) {
-    (nets[name] || []).forEach(function (net) {
-      if (net.family === 'IPv4' && !net.internal) ips.push(net.address);
+/* Só começamos a aceitar conexões depois que o estado inicial (arquivo local
+   e/ou banco) terminar de carregar — nenhuma requisição é atendida antes de
+   server.listen() ser chamado, então não existe risco de alguém "chegar
+   primeiro" e encontrar a variável store vazia. */
+loadStore().then(function (loaded) {
+  store = loaded;
+  server.listen(PORT, '0.0.0.0', function () {
+    console.log('=========================================================');
+    console.log(' Controle de Pneus — servidor rodando');
+    console.log('=========================================================');
+    if (db.isEnabled()) {
+      console.log(' Banco de dados (Supabase/Postgres): CONECTADO');
+    } else {
+      console.log(' Banco de dados: não configurado — usando apenas o arquivo local.');
+    }
+    console.log(' Neste computador, abra no navegador:');
+    console.log('   http://localhost:' + PORT);
+    var nets = os.networkInterfaces();
+    var ips = [];
+    Object.keys(nets).forEach(function (name) {
+      (nets[name] || []).forEach(function (net) {
+        if (net.family === 'IPv4' && !net.internal) ips.push(net.address);
+      });
     });
+    if (ips.length) {
+      console.log('');
+      console.log(' De OUTROS celulares/computadores na MESMA rede Wi-Fi/cabo, abra:');
+      ips.forEach(function (ip) { console.log('   http://' + ip + ':' + PORT); });
+    } else {
+      console.log('');
+      console.log(' Não consegui detectar o IP desta rede automaticamente.');
+      console.log(' No Windows, abra o Prompt de Comando e digite "ipconfig" para achar o "Endereço IPv4".');
+    }
+    console.log('');
+    console.log(' Deixe esta janela aberta enquanto o sistema estiver em uso.');
+    console.log(' Para parar o servidor, feche esta janela ou aperte Ctrl+C.');
+    console.log('=========================================================');
   });
-  if (ips.length) {
-    console.log('');
-    console.log(' De OUTROS celulares/computadores na MESMA rede Wi-Fi/cabo, abra:');
-    ips.forEach(function (ip) { console.log('   http://' + ip + ':' + PORT); });
-  } else {
-    console.log('');
-    console.log(' Não consegui detectar o IP desta rede automaticamente.');
-    console.log(' No Windows, abra o Prompt de Comando e digite "ipconfig" para achar o "Endereço IPv4".');
-  }
-  console.log('');
-  console.log(' Deixe esta janela aberta enquanto o sistema estiver em uso.');
-  console.log(' Para parar o servidor, feche esta janela ou aperte Ctrl+C.');
-  console.log('=========================================================');
+}).catch(function (err) {
+  console.error('Erro fatal ao iniciar o servidor:', err);
+  process.exit(1);
 });

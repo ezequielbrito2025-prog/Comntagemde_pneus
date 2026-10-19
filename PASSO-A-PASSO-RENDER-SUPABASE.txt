@@ -1,0 +1,192 @@
+==========================================================
+ CONTROLE DE PNEUS — MUDANDO DO RAILWAY PARA RENDER + SUPABASE
+==========================================================
+
+Este guia troca só o "onde o sistema mora" (a hospedagem). O sistema em si
+continua exatamente o mesmo: mesmo login de usuário/senha, mesmo tempo real,
+mesmo modo offline, mesmas telas. Ninguém que usa o sistema vai notar
+diferença, a não ser o endereço (link) para acessar.
+
+Por que duas coisas (Render E Supabase) em vez de só uma? Porque elas fazem
+papéis diferentes:
+  - RENDER = onde o programa RODA (substitui o Railway).
+  - SUPABASE = onde os DADOS ficam guardados (um banco de dados Postgres).
+    Isso é novo: antes, os dados ficavam direto num arquivo dentro do
+    Railway. No Render, esse arquivo se perde toda vez que o sistema é
+    atualizado — por isso agora os dados passam a morar num banco separado,
+    que nunca se perde.
+
+Esse guia tem 5 etapas. Pode ir uma por vez, sem pressa.
+
+
+ETAPA 1 — CRIAR O BANCO DE DADOS NO SUPABASE
+------------------------------------------------------------
+1. Acesse https://supabase.com e crie uma conta (pode ser com sua conta
+   Google/GitHub, ou com e-mail e senha).
+2. Clique em "New project" (Novo projeto).
+3. Escolha um nome (ex.: "controle-de-pneus"), crie uma SENHA do banco de
+   dados forte e GUARDE ELA em algum lugar seguro (um gerenciador de senhas,
+   ou um bloco de notas que só você acessa) — você vai precisar dela em
+   seguida, e o Supabase não mostra ela de novo depois.
+4. Escolha a região mais próxima do Brasil (ex.: "South America (São
+   Paulo)", se aparecer na lista) e clique em criar. Leva 1-2 minutos para
+   o banco ficar pronto.
+5. Depois que o projeto abrir, vá em: menu "Settings" (⚙️, geralmente no
+   canto inferior esquerdo) > "Database".
+6. Procure a seção "Connection string" (string de conexão) e escolha o
+   formato "URI". Vai aparecer algo parecido com isto:
+
+   postgresql://postgres.xxxxxxxxxxxx:[YOUR-PASSWORD]@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
+
+7. Copie esse texto todo e troque a parte "[YOUR-PASSWORD]" pela senha que
+   você criou no passo 3 (sem os colchetes). O resultado final (com a senha
+   de verdade no lugar) é o seu DATABASE_URL — guarde essa linha completa,
+   você vai colar ela no Render na Etapa 3.
+
+   Dica: se a página do Supabase oferecer duas opções de conexão ("Session
+   pooler" / "Transaction pooler" / conexão direta), qualquer uma funciona
+   para este sistema. Se não tiver certeza, use a que a própria página
+   mostrar primeiro/como padrão.
+
+
+ETAPA 2 — COLOCAR OS ARQUIVOS DO SISTEMA NO GITHUB
+------------------------------------------------------------
+O Render precisa que o código do sistema esteja num repositório do GitHub
+(não dá para simplesmente enviar os arquivos direto pro Render). Isso é
+mais simples do que parece — não precisa instalar nada nem usar comandos,
+dá pra fazer tudo pelo site.
+
+1. Acesse https://github.com e crie uma conta, se ainda não tiver uma.
+2. Clique no "+" no canto superior direito > "New repository".
+3. Dê um nome (ex.: "controle-de-pneus"), marque como "Private" (privado —
+   assim só você, ou quem você convidar, consegue ver o código) e clique
+   em "Create repository".
+4. Na página do repositório recém-criado, clique em "uploading an existing
+   file" (ou "Add file" > "Upload files").
+5. Agora, no seu computador, abra a pasta do projeto "controle-de-pneus" e
+   arraste para o GitHub TODOS os arquivos e pastas, MENOS estas (não
+   envie elas, não são necessárias):
+     - a pasta "dados" (se existir) — são os dados antigos, não o código
+     - a pasta "node_modules" (se existir) — o Render instala isso sozinho
+     - arquivos .log, se houver
+
+   Envie, entre outros: server.js, db.js, package.json, index.html,
+   style.css, app.js, supabase-schema.sql, .gitignore, iniciar-servidor.bat
+6. Role para baixo e clique em "Commit changes" para confirmar o envio.
+
+Pronto — o código do sistema agora está no GitHub.
+
+
+ETAPA 3 — CRIAR O SERVIÇO NO RENDER
+------------------------------------------------------------
+1. Acesse https://render.com e crie uma conta (pode entrar direto com a
+   conta do GitHub que você usou na Etapa 2 — isso já deixa os dois
+   conectados automaticamente).
+2. No painel do Render, clique em "New" > "Web Service".
+3. Escolha o repositório "controle-de-pneus" que você criou no GitHub (se
+   não aparecer na lista, clique em "Configure account" e autorize o
+   Render a ver esse repositório).
+4. Preencha/confira:
+     - Name: um nome para o serviço (ex.: "controle-de-pneus") — isso vira
+       parte do endereço final, algo como
+       https://controle-de-pneus.onrender.com
+     - Region: a mais próxima do Brasil disponível (ex.: Oregon ou Ohio,
+       nos EUA — o Render ainda não tem região no Brasil; isso deixa o
+       sistema um pouco mais lento para quem acessa de aqui, mas continua
+       funcionando bem)
+     - Branch: main (ou "master", o que aparecer)
+     - Build Command: npm install
+     - Start Command: npm start
+     - Instance Type: "Free" serve para testar; para uso no dia a dia da
+       empresa, o plano pago mais barato ("Starter") evita que o serviço
+       "durma" depois de um tempo sem uso (no plano Free, o primeiro
+       acesso depois de um tempo parado demora mais pra responder).
+5. Antes de clicar em criar, abra a seção "Environment Variables" (ou
+   "Advanced" > "Add Environment Variable") e adicione:
+     - Chave (Key): DATABASE_URL
+     - Valor (Value): cole aqui a linha completa que você guardou na
+       Etapa 1 (com a senha de verdade já no lugar de [YOUR-PASSWORD])
+6. Clique em "Create Web Service" (ou "Deploy Web Service").
+
+O Render vai baixar o código do GitHub, instalar as dependências e ligar o
+servidor automaticamente. Isso leva alguns minutos na primeira vez. Você
+pode acompanhar o progresso na aba "Logs" — quando aparecer a mensagem
+"Controle de Pneus — servidor rodando" e "Banco de dados
+(Supabase/Postgres): CONECTADO", está pronto.
+
+O endereço do seu sistema vai aparecer no topo da página do serviço,
+parecido com: https://controle-de-pneus.onrender.com
+
+
+ETAPA 4 — TESTAR O SISTEMA NOVO
+------------------------------------------------------------
+1. Abra o endereço do Render num navegador.
+2. Entre com o usuário "admin" e a senha padrão "admin123" (a mesma senha
+   padrão que o sistema sempre usou nessa conta, enquanto você não a tiver
+   trocado).
+3. Confira se o sistema abre normalmente e se o estoque padrão aparece.
+4. Troque a senha do admin (tela "Usuários") para uma senha só sua, se
+   ainda não tiver feito isso antes.
+
+Se até aqui tudo funcionou, o sistema novo está no ar, rodando no Render e
+guardando os dados no Supabase.
+
+
+ETAPA 5 — TRAZER OS DADOS REAIS QUE ESTÃO HOJE NO RAILWAY
+------------------------------------------------------------
+O sistema novo começa com o catálogo padrão (zerado), não com os dados
+reais que já estão em uso no Railway hoje. Para trazer os dados de
+verdade (materiais, estoque atual, movimentações, usuários), use a própria
+função de backup que o sistema já tem, nos dois endereços:
+
+1. No sistema ANTIGO (Railway), entre como admin, vá em "Backup" e clique
+   em "⬇ Exportar backup (.json)". Isso baixa um arquivo com todos os
+   dados atuais.
+2. No sistema NOVO (Render), entre como admin, vá em "Backup" e clique em
+   "⬆ Escolher arquivo de backup…", selecione o arquivo que você acabou de
+   baixar, e confirme a importação.
+3. Confira se os números de estoque, materiais e histórico aparecem certos
+   no sistema novo.
+
+IMPORTANTE: faça essa importação em um momento em que ninguém esteja
+lançando movimentações no sistema antigo (por exemplo, fora do horário de
+expediente), para não perder nenhum lançamento feito entre o momento do
+backup e o momento da troca definitiva. Depois de importar e confirmar que
+está tudo certo, avise a equipe para passar a usar só o novo endereço
+(Render) e, quando tiver certeza de que não precisa mais do antigo, pode
+desligar o serviço no Railway.
+
+
+PERGUNTAS FREQUENTES
+------------------------------------------------------------
+"Preciso fazer algo manualmente no banco de dados (tabelas, etc.)?"
+Não. O próprio servidor cria a tabela que ele precisa (chamada
+"app_store") automaticamente, na primeira vez que liga com o DATABASE_URL
+configurado. O arquivo supabase-schema.sql, incluído junto, é só uma
+referência/documentação de como essa tabela é — não precisa rodar nada
+dele.
+
+"E se eu esquecer de configurar o DATABASE_URL no Render?"
+O sistema continua funcionando normalmente, só que volta a guardar os
+dados só no disco do próprio Render — que se perde a cada novo deploy
+(toda vez que você atualizar o código). Ou seja: funciona para testar, mas
+não é seguro para o uso real da empresa sem o DATABASE_URL configurado.
+
+"Posso continuar acessando pela rede local, do jeito antigo, também?"
+Sim. Esse modo (server.js rodando direto num computador da empresa, sem
+internet) continua funcionando exatamente igual, sem precisar de
+DATABASE_URL nem de nenhuma das etapas deste guia — essa mudança só afeta
+quem optar por hospedar na internet.
+
+"Esqueci a senha do banco de dados do Supabase."
+Vá em Settings > Database no painel do Supabase e clique em "Reset
+database password" para gerar uma nova. Depois, atualize o valor de
+DATABASE_URL no Render (aba "Environment") com a senha nova e salve — o
+Render reinicia o serviço automaticamente.
+
+"O que aconteceu com os guias de SharePoint/Power Apps de antes?"
+Esse plano (Render + Supabase, mantendo o sistema original com login
+próprio, tempo real e modo offline) substitui o plano anterior de levar o
+sistema 100% para dentro do SharePoint com Listas e Power Apps. Os
+arquivos antigos (LEIA-ME-SHAREPOINT.txt e LEIA-ME-LISTAS-SHAREPOINT.txt)
+continuam na pasta só para referência, mas não são mais o caminho seguido.
